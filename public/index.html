@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>꿀성경 진도표 생성 도구</title>
+    <link rel="icon" href="favicon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="backdrop" aria-hidden="true">
+      <div class="glow glow-one"></div>
+      <div class="glow glow-two"></div>
+      <div class="grid"></div>
+    </div>
+
+    <main class="frame">
+      <header class="hero">
+        <div class="hero-top">
+          <button class="cheer-button" type="button" id="cheerButton">
+            꿀성경 파이팅
+          </button>
+          <button
+            class="theme-toggle"
+            type="button"
+            id="themeToggle"
+            aria-pressed="false"
+          >
+            <span class="theme-icon" aria-hidden="true">🌙</span>
+            <span class="theme-label">다크 모드</span>
+          </button>
+        </div>
+        <h1>꿀성경 진도표 생성 도구</h1>
+        <p class="subtitle">
+          카카오톡 대화 CSV를 업로드하고 분석을 실행해 멤버별 인증 내역을
+          다운로드하세요.
+        </p>
+      </header>
+
+      <section class="panel">
+        <form id="analyzeForm" class="stack">
+          <label class="file-input" for="csvFile">
+            <input
+              type="file"
+              id="csvFile"
+              name="csvFile"
+              accept=".csv,text/csv"
+            />
+            <span class="file-icon" aria-hidden="true">CSV</span>
+            <span class="file-body">
+              <span class="file-title">대화 CSV 선택</span>
+              <span class="file-meta" id="fileMeta">선택된 파일 없음</span>
+            </span>
+            <span class="file-chip">CSV 전용</span>
+          </label>
+
+          <div class="actions">
+            <button class="primary" type="submit" id="analyzeButton" disabled>
+              분석
+            </button>
+            <a
+              class="download is-disabled"
+              id="downloadButton"
+              href="#"
+              aria-disabled="true"
+            >
+              결과 다운로드
+            </a>
+          </div>
+
+          <div class="status" id="status" data-state="idle" role="status" aria-live="polite">
+            <span class="status-dot" aria-hidden="true"></span>
+            <span class="status-text">CSV 업로드를 기다리는 중입니다.</span>
+            <span class="spinner" id="spinner" aria-hidden="true"></span>
+          </div>
+        </form>
+      </section>
+
+      <section class="panel note">
+        <h2>사용 방법</h2>
+        <ol class="steps">
+          <li>카카오톡 단체 채팅방 설정</li>
+          <li>대화 내용 관리</li>
+          <li>대화 내용 저장</li>
+          <li>텍스트 파일로 저장</li>
+          <li>.csv 파일 업로드</li>
+        </ol>
+
+      </section>
+    </main>
+
+    <script src="app.js"></script>
+  </body>
+</html>
