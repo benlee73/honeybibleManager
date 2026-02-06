@@ -161,25 +161,20 @@ def build_output_csv(users, track_mode="single"):
         header.extend(all_dates_sorted)
         writer.writerow(header)
 
-        users_with_old = sorted(
-            u for u, e in users.items() if e.get("dates_old")
+        all_users = sorted(
+            u for u, e in users.items()
+            if e.get("dates_old") or e.get("dates_new")
         )
-        for user in users_with_old:
+        for user in all_users:
             entry = users[user]
-            date_set = entry["dates_old"]
-            row = [user, entry.get("emoji", ""), "구약"]
-            row.extend("O" if d in date_set else "" for d in all_dates_sorted)
-            writer.writerow(row)
-
-        users_with_new = sorted(
-            u for u, e in users.items() if e.get("dates_new")
-        )
-        for user in users_with_new:
-            entry = users[user]
-            date_set = entry["dates_new"]
-            row = [user, entry.get("emoji", ""), "신약"]
-            row.extend("O" if d in date_set else "" for d in all_dates_sorted)
-            writer.writerow(row)
+            if entry.get("dates_old"):
+                row = [user, entry.get("emoji", ""), "구약"]
+                row.extend("O" if d in entry["dates_old"] else "" for d in all_dates_sorted)
+                writer.writerow(row)
+            if entry.get("dates_new"):
+                row = [user, entry.get("emoji", ""), "신약"]
+                row.extend("O" if d in entry["dates_new"] else "" for d in all_dates_sorted)
+                writer.writerow(row)
     else:
         user_dates = {}
         all_dates = set()

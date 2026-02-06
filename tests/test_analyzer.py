@@ -373,7 +373,7 @@ class TestBuildOutputCsvDual:
         assert header[1] == "이모티콘"
         assert header[2] == "트랙"
 
-    def test_build_output_csv_dual__구약_먼저_신약_나중(self):
+    def test_build_output_csv_dual__사용자별_구약_신약_묶음(self):
         users = {
             "user1": {"dates_old": {"2/2"}, "dates_new": {"2/3"}, "emoji": "😀"},
             "user2": {"dates_old": {"2/2"}, "dates_new": {"2/3"}, "emoji": "🔥"},
@@ -382,11 +382,15 @@ class TestBuildOutputCsvDual:
         text = output.decode("utf-8-sig")
         reader = csv.reader(io.StringIO(text, newline=""))
         rows = list(reader)
-        # 헤더 + user1구약 + user2구약 + user1신약 + user2신약 = 5행
+        # 헤더 + user1구약 + user1신약 + user2구약 + user2신약 = 5행
         assert len(rows) == 5
+        assert rows[1][0] == "user1"
         assert rows[1][2] == "구약"
-        assert rows[2][2] == "구약"
-        assert rows[3][2] == "신약"
+        assert rows[2][0] == "user1"
+        assert rows[2][2] == "신약"
+        assert rows[3][0] == "user2"
+        assert rows[3][2] == "구약"
+        assert rows[4][0] == "user2"
         assert rows[4][2] == "신약"
 
     def test_build_output_csv_dual__빈_트랙_사용자_생략(self):
