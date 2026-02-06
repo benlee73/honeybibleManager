@@ -88,6 +88,7 @@ const fileMeta = document.getElementById("fileMeta");
 
 const resultsSection = document.getElementById("results");
 const previewTable = document.getElementById("previewTable");
+const ziplineCat = document.getElementById("ziplineCat");
 
 let currentObjectUrl = null;
 
@@ -109,6 +110,9 @@ const resetDownload = () => {
   downloadButton.setAttribute("aria-disabled", "true");
   downloadButton.removeAttribute("href");
   downloadButton.removeAttribute("download");
+  if (ziplineCat) {
+    ziplineCat.classList.remove("sliding");
+  }
 };
 
 const isCsvFile = (file) => {
@@ -393,15 +397,31 @@ form.addEventListener("submit", async (event) => {
 
     clearObjectUrl();
     currentObjectUrl = URL.createObjectURL(blob);
-    downloadButton.href = currentObjectUrl;
-    downloadButton.download = filename;
-    downloadButton.classList.remove("is-disabled");
-    downloadButton.setAttribute("aria-disabled", "false");
 
-    setStatus("success", "분석 완료. 다운로드 준비가 끝났습니다.");
+    setStatus("success", "분석 완료! 고양이가 결과를 배달 중...");
 
     const csvText = await blob.text();
-    showResults(csvText, trackMode);
+
+    if (ziplineCat) {
+      ziplineCat.classList.add("sliding");
+      ziplineCat.addEventListener("animationend", function onSlideEnd() {
+        ziplineCat.removeEventListener("animationend", onSlideEnd);
+        downloadButton.href = currentObjectUrl;
+        downloadButton.download = filename;
+        downloadButton.classList.remove("is-disabled");
+        downloadButton.setAttribute("aria-disabled", "false");
+        ziplineCat.classList.remove("sliding");
+        setStatus("success", "다운로드 준비가 끝났습니다.");
+        showResults(csvText, trackMode);
+      });
+    } else {
+      downloadButton.href = currentObjectUrl;
+      downloadButton.download = filename;
+      downloadButton.classList.remove("is-disabled");
+      downloadButton.setAttribute("aria-disabled", "false");
+      setStatus("success", "분석 완료. 다운로드 준비가 끝났습니다.");
+      showResults(csvText, trackMode);
+    }
   } catch (error) {
     const message = error instanceof Error ? error.message : "분석에 실패했습니다.";
     setStatus("error", message);

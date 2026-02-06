@@ -239,6 +239,7 @@ body {
 h1 {
   font-family: var(--font-display);
   font-size: clamp(34px, 5vw, 54px);
+  font-weight: normal;
   margin: 0;
   color: var(--ink-1);
   letter-spacing: -0.02em;
@@ -391,6 +392,7 @@ h1 {
   display: flex;
   flex-wrap: wrap;
   gap: 12px;
+  align-items: center;
 }
 
 button,
@@ -437,6 +439,47 @@ button,
   opacity: 0.45;
   cursor: not-allowed;
   pointer-events: none;
+}
+
+.zipline {
+  position: relative;
+  flex: 1;
+  height: 20px;
+  min-width: 60px;
+  display: flex;
+  align-items: center;
+}
+
+.zipline-line {
+  width: 100%;
+  height: 2px;
+  background: var(--honey-2);
+  border-radius: 1px;
+  opacity: 0.5;
+}
+
+.zipline-cat {
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 20px;
+  opacity: 0;
+  line-height: 1;
+}
+
+.zipline-cat.sliding {
+  opacity: 1;
+  animation: zipline-slide 2s ease-in-out forwards;
+}
+
+@keyframes zipline-slide {
+  from {
+    left: 0%;
+  }
+  to {
+    left: 100%;
+  }
 }
 
 .status {
@@ -688,6 +731,39 @@ code {
   .actions {
     flex-direction: column;
     align-items: stretch;
+  }
+
+  .zipline {
+    flex: none;
+    width: 100%;
+    height: 40px;
+    min-width: unset;
+    flex-direction: column;
+    justify-content: center;
+  }
+
+  .zipline-line {
+    width: 2px;
+    height: 100%;
+  }
+
+  .zipline-cat {
+    left: 50%;
+    top: 0;
+    transform: translate(-50%, -50%);
+  }
+
+  .zipline-cat.sliding {
+    animation: zipline-slide-vertical 2s ease-in-out forwards;
+  }
+
+  @keyframes zipline-slide-vertical {
+    from {
+      top: 0%;
+    }
+    to {
+      top: 100%;
+    }
   }
 
   .download,
