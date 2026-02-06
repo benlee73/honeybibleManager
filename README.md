@@ -4,15 +4,23 @@
 단일 서버입니다. 결과는 멤버별 이모티콘/날짜를 정리한 CSV로 내려받습니다.
 
 ## 요구사항
-- Python 3.9+ (외부 의존성 없음)
+- Python 3.12+
+- Poetry
 
 ## 로컬 실행
 
 ```bash
-python3 server.py --port 8000
+poetry install
+poetry run python server.py --port 8000
 ```
 
 브라우저에서 `http://localhost:8000`을 열면 됩니다.
+
+## 테스트
+
+```bash
+poetry run python -m pytest tests/ -v
+```
 
 ## 엔드포인트
 - POST /analyze (multipart/form-data)
@@ -44,15 +52,13 @@ python3 server.py --host 0.0.0.0 --port $PORT
 
 배포가 완료되면 제공된 URL로 외부에서 접속할 수 있습니다.
 
-TODO
-- 테스트 코드 추가
+## TODO
+- ~~테스트 코드 추가~~
+- ~~프로젝트 구조 리팩토링~~
 - 로깅 추가
-- 프로젝트 구조 리팩토링
 - 결과 포맷 변경
-  - as-is
-    - 컬럼에 day1, day2 ...
-  - to-be
-    - 컬럼에 2/2, 2/3 ... 
+  - as-is: 컬럼에 day1, day2 ...
+  - to-be: 컬럼에 2/2, 2/3 ...
 - 투트랙도 볼 수 있도록
 - 중복 허용
 - 결과 csv 말고 엑셀같은 걸로 해서 더 이쁘게 보여주기
