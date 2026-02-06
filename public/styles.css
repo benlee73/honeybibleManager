@@ -1,4 +1,4 @@
-@import url("https://fonts.googleapis.com/css2?family=Gamja+Flower&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Gamja+Flower&family=Jua&display=swap");
 
 :root {
   --honey-1: #f7c452;
@@ -31,7 +31,7 @@
   --cheer-bg: linear-gradient(135deg, rgba(255, 248, 230, 0.95), rgba(255, 232, 198, 0.9));
   --heart-color: #f07b77;
   --heart-glow: rgba(240, 123, 119, 0.45);
-  --font-display: "Gamja Flower", "Apple SD Gothic Neo", "Malgun Gothic", cursive;
+  --font-display: "Jua", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
   --font-body: "Gamja Flower", "Apple SD Gothic Neo", "Malgun Gothic", cursive;
 }
 
@@ -398,6 +398,7 @@ button,
   border: none;
   border-radius: 14px;
   padding: 12px 22px;
+  font-family: var(--font-display);
   font-weight: 600;
   font-size: 15px;
   cursor: pointer;
