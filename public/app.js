@@ -86,6 +86,9 @@ const status = document.getElementById("status");
 const statusText = status.querySelector(".status-text");
 const fileMeta = document.getElementById("fileMeta");
 
+const resultsSection = document.getElementById("results");
+const previewTable = document.getElementById("previewTable");
+
 let currentObjectUrl = null;
 
 const setStatus = (state, message) => {
@@ -169,10 +172,167 @@ const setFormEnabled = (enabled) => {
   analyzeButton.disabled = !enabled;
 };
 
+const hideResults = () => {
+  if (resultsSection) {
+    resultsSection.hidden = true;
+  }
+};
+
+const parseCsvText = (text) => {
+  const cleaned = text.replace(/^\uFEFF/, "");
+  const lines = cleaned.split(/\r?\n/).filter((line) => line.trim());
+  if (lines.length === 0) {
+    return { headers: [], rows: [] };
+  }
+  const parse = (line) => {
+    const result = [];
+    let current = "";
+    let inQuotes = false;
+    for (let i = 0; i < line.length; i += 1) {
+      const ch = line[i];
+      if (inQuotes) {
+        if (ch === '"' && line[i + 1] === '"') {
+          current += '"';
+          i += 1;
+        } else if (ch === '"') {
+          inQuotes = false;
+        } else {
+          current += ch;
+        }
+      } else if (ch === '"') {
+        inQuotes = true;
+      } else if (ch === ",") {
+        result.push(current);
+        current = "";
+      } else {
+        current += ch;
+      }
+    }
+    result.push(current);
+    return result;
+  };
+  const headers = parse(lines[0]);
+  const rows = lines.slice(1).map(parse);
+  return { headers, rows };
+};
+
+const computeStats = (headers, rows, trackMode) => {
+  const dateStart = trackMode === "dual" ? 3 : 2;
+  const dateCount = Math.max(0, headers.length - dateStart);
+
+  const nameSet = new Set();
+  rows.forEach((row) => nameSet.add(row[0]));
+  const members = nameSet.size;
+
+  let totalO = 0;
+  const nameCounts = {};
+  rows.forEach((row) => {
+    let rowO = 0;
+    for (let i = dateStart; i < row.length; i += 1) {
+      if (row[i] === "O") {
+        rowO += 1;
+      }
+    }
+    totalO += rowO;
+    const name = row[0];
+    nameCounts[name] = (nameCounts[name] || 0) + rowO;
+  });
+
+  const totalCells = rows.length * dateCount;
+  const avgRate = totalCells > 0 ? Math.round((totalO / totalCells) * 100) : 0;
+
+  let topName = "-";
+  let topCount = 0;
+  for (const [name, count] of Object.entries(nameCounts)) {
+    if (count > topCount) {
+      topCount = count;
+      topName = name;
+    }
+  }
+
+  return { members, dates: dateCount, avgRate, topName };
+};
+
+const animateValue = (element, end, duration, suffix) => {
+  const start = 0;
+  const startTime = performance.now();
+  const step = (now) => {
+    const elapsed = now - startTime;
+    const progress = Math.min(elapsed / duration, 1);
+    const eased = 1 - Math.pow(1 - progress, 3);
+    const current = Math.round(start + (end - start) * eased);
+    element.textContent = current + (suffix || "");
+    if (progress < 1) {
+      requestAnimationFrame(step);
+    }
+  };
+  requestAnimationFrame(step);
+};
+
+const renderPreviewTable = (headers, rows) => {
+  if (!previewTable) {
+    return;
+  }
+  previewTable.textContent = "";
+
+  const thead = document.createElement("thead");
+  const headRow = document.createElement("tr");
+  headers.forEach((h) => {
+    const th = document.createElement("th");
+    th.textContent = h;
+    headRow.appendChild(th);
+  });
+  thead.appendChild(headRow);
+  previewTable.appendChild(thead);
+
+  const tbody = document.createElement("tbody");
+  rows.forEach((row) => {
+    const tr = document.createElement("tr");
+    row.forEach((cell) => {
+      const td = document.createElement("td");
+      td.textContent = cell;
+      if (cell === "O") {
+        td.className = "mark";
+      }
+      tr.appendChild(td);
+    });
+    tbody.appendChild(tr);
+  });
+  previewTable.appendChild(tbody);
+};
+
+const showResults = (csvText, trackMode) => {
+  if (!resultsSection) {
+    return;
+  }
+  const { headers, rows } = parseCsvText(csvText);
+  if (headers.length === 0) {
+    return;
+  }
+
+  const stats = computeStats(headers, rows, trackMode);
+
+  const statMembers = document.getElementById("statMembers");
+  const statDates = document.getElementById("statDates");
+  const statAvg = document.getElementById("statAvg");
+  const statTop = document.getElementById("statTop");
+
+  if (statMembers) animateValue(statMembers, stats.members, 600, "");
+  if (statDates) animateValue(statDates, stats.dates, 600, "");
+  if (statAvg) animateValue(statAvg, stats.avgRate, 800, "%");
+  if (statTop) statTop.textContent = stats.topName;
+
+  renderPreviewTable(headers, rows);
+
+  resultsSection.hidden = false;
+  resultsSection.scrollIntoView({ behavior: "smooth" });
+};
+
 fileInput.addEventListener("change", () => {
   const file = fileInput.files[0];
 
   resetDownload();
+  hideResults();
 
   if (!file) {
     analyzeButton.disabled = true;
@@ -239,6 +399,9 @@ form.addEventListener("submit", async (event) => {
     downloadButton.setAttribute("aria-disabled", "false");
 
     setStatus("success", "분석 완료. 다운로드 준비가 끝났습니다.");
+
+    const csvText = await blob.text();
+    showResults(csvText, trackMode);
   } catch (error) {
     const message = error instanceof Error ? error.message : "분석에 실패했습니다.";
     setStatus("error", message);
