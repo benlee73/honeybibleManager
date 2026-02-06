@@ -1,7 +1,39 @@
 # CLAUDE.md
 
+## 프로젝트 개요
+
+카카오톡 대화 CSV를 업로드하면 멤버별 이모티콘/날짜를 분석하여 결과 CSV로 반환하는 웹 서버.
+
+## 기술 스택
+
+- Python 3.12+ (외부 런타임 의존성 없음, 표준 라이브러리만 사용)
+- 의존성 관리: Poetry
+- 테스트: pytest (dev 의존성)
+
+## 프로젝트 구조
+
+```
+server.py              # 진입점. HTTPServer 실행 (--host, --port)
+app/
+  handler.py           # HoneyBibleHandler: HTTP 요청 처리 (GET 정적파일, POST /analyze)
+  analyzer.py          # analyze_chat(), build_output_csv(): CSV 분석 및 결과 생성
+  date_parser.py       # parse_dates(): 메시지에서 날짜 파싱 (범위~, 쉼표, M/D 형식)
+  emoji.py             # extract_trailing_emoji(), normalize_emoji(): 이모티콘 추출/정규화
+tests/                 # 각 app 모듈에 대응하는 테스트 파일
+public/                # 프론트엔드 정적 파일 (index.html, app.js, styles.css)
+```
+
+## 핵심 동작 흐름
+
+1. 클라이언트가 CSV 파일을 `POST /analyze`로 업로드
+2. `handler.py`가 multipart 데이터에서 파일 추출
+3. `analyzer.py`가 CSV를 파싱하고 사용자별 이모티콘 할당 및 날짜 수집
+4. `date_parser.py`와 `emoji.py`가 각각 날짜/이모티콘 추출 담당
+5. 결과를 UTF-8 BOM CSV로 변환하여 반환
+
 ## 작업 규칙
 
 - 기능을 추가하거나 수정할 때 관련 테스트 코드도 반드시 작성하거나 수정한다.
-- 기능 추가/수정 후 모든 테스트(`python -m pytest tests/ -v`)가 통과하면 커밋한다.
+- 기능 추가/수정 후 모든 테스트(`poetry run python -m pytest tests/ -v`)가 통과하면 커밋한다.
 - 테스트 코드, Git 커밋 메시지 등은 모두 한글로 작성한다.
+- 프로젝트 구조, 모듈, 기술 스택 등이 변경되면 CLAUDE.md도 함께 업데이트한다.
