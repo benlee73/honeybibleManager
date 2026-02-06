@@ -1,0 +1,19 @@
+[tool.poetry]
+name = "honeybible-manager"
+version = "0.1.0"
+description = "꿀바이블 관리 서버"
+readme = "README.md"
+package-mode = false
+
+[tool.poetry.dependencies]
+python = "^3.12"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^9.0"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
