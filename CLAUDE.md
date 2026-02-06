@@ -15,19 +15,20 @@
 ```
 server.py              # 진입점. HTTPServer 실행 (--host, --port)
 app/
-  handler.py           # HoneyBibleHandler: HTTP 요청 처리 (GET 정적파일, POST /analyze)
-  analyzer.py          # analyze_chat(), build_output_csv(): CSV 분석 및 결과 생성
+  handler.py           # HoneyBibleHandler: HTTP 요청 처리 (GET 정적파일, POST /analyze), extract_multipart_field()
+  analyzer.py          # analyze_chat(), build_output_csv(), extract_tracks(): CSV 분석/결과 생성/트랙 감지
   date_parser.py       # parse_dates(): 메시지에서 날짜 파싱 (범위~, 쉼표, M/D 형식)
   emoji.py             # extract_trailing_emoji(), normalize_emoji(): 이모티콘 추출/정규화
+  logger.py            # setup_logging(), get_logger(): 콘솔+파일(server.log) 로깅 설정
 tests/                 # 각 app 모듈에 대응하는 테스트 파일
 public/                # 프론트엔드 정적 파일 (index.html, app.js, styles.css)
 ```
 
 ## 핵심 동작 흐름
 
-1. 클라이언트가 CSV 파일을 `POST /analyze`로 업로드
-2. `handler.py`가 multipart 데이터에서 파일 추출
-3. `analyzer.py`가 CSV를 파싱하고 사용자별 이모티콘 할당 및 날짜 수집
+1. 클라이언트가 CSV 파일과 `track_mode`(`single`/`dual`)를 `POST /analyze`로 업로드
+2. `handler.py`가 multipart 데이터에서 파일과 트랙 모드 추출
+3. `analyzer.py`가 CSV를 파싱하고 사용자별 이모티콘 할당 및 날짜 수집 (투트랙 모드 시 구약/신약 분리)
 4. `date_parser.py`와 `emoji.py`가 각각 날짜/이모티콘 추출 담당
 5. 결과를 UTF-8 BOM CSV로 변환하여 반환
 
