@@ -214,6 +214,8 @@ form.addEventListener("submit", async (event) => {
   try {
     const formData = new FormData();
     formData.append("file", file, file.name);
+    const trackMode = document.querySelector('input[name="trackMode"]:checked').value;
+    formData.append("track_mode", trackMode);
 
     const response = await fetch(API_ENDPOINT, {
       method: "POST",
