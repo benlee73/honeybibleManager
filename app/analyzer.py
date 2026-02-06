@@ -4,6 +4,8 @@ import io
 from app.date_parser import DATE_TIME_PATTERN, parse_dates
 from app.emoji import extract_trailing_emoji, normalize_emoji
 
+MAX_DATES_PER_MESSAGE = 14
+
 
 def decode_csv_payload(payload):
     for encoding in ("utf-8-sig", "utf-8", "cp949", "euc-kr"):
@@ -72,6 +74,8 @@ def analyze_chat(csv_text, track_mode="single"):
         dates = parse_dates(message)
         if not dates:
             continue
+        if len(dates) > MAX_DATES_PER_MESSAGE:
+            continue
         trailing_emoji = extract_trailing_emoji(message)
         if not trailing_emoji:
             continue
@@ -103,6 +107,8 @@ def analyze_chat(csv_text, track_mode="single"):
             continue
         dates = parse_dates(message)
         if not dates:
+            continue
+        if len(dates) > MAX_DATES_PER_MESSAGE:
             continue
 
         if track_mode == "dual":

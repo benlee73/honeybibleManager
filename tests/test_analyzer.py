@@ -133,6 +133,29 @@ class TestAnalyzeChat:
         result = analyze_chat(csv_text)
         assert "user1" not in result
 
+    def test_analyze_chat__날짜_수_상한_초과_메시지__스킵(self):
+        # 2/2~2/20 범위는 19개 날짜로 확장되어 상한(14) 초과 → 스킵
+        csv_text = self._make_csv([
+            ["날짜", "이름", "메시지"],
+            ["2024-01-01", "user1", "3/15😀"],
+            ["2024-01-02", "user1", "2/2~2/20😀"],
+        ])
+        result = analyze_chat(csv_text)
+        assert "user1" in result
+        # 상한 초과 메시지의 날짜는 포함되지 않아야 함
+        assert result["user1"]["dates"] == {"3/15"}
+
+    def test_analyze_chat__날짜_수_상한_이하_메시지__정상_처리(self):
+        # 2/2~2/10 범위는 9개 날짜로 상한(14) 이하 → 정상 처리
+        csv_text = self._make_csv([
+            ["날짜", "이름", "메시지"],
+            ["2024-01-01", "user1", "2/2~2/10😀"],
+        ])
+        result = analyze_chat(csv_text)
+        assert "user1" in result
+        assert "2/2" in result["user1"]["dates"]
+        assert "2/10" in result["user1"]["dates"]
+
     def test_analyze_chat__같은_날짜_여러_메시지__1회로_카운팅(self):
         csv_text = self._make_csv([
             ["날짜", "이름", "메시지"],
@@ -277,6 +300,18 @@ class TestAnalyzeChatDual:
         assert result["user1"]["dates_new"] == set()
         assert result["user2"]["dates_old"] == {"2/3"}
         assert result["user2"]["dates_new"] == {"2/2", "2/3"}
+
+    def test_analyze_chat_dual__날짜_수_상한_초과_메시지__스킵(self):
+        # 2/2~2/20 범위는 19개 날짜로 확장되어 상한(14) 초과 → 스킵
+        csv_text = self._make_csv([
+            ["날짜", "이름", "메시지"],
+            ["2024-01-01", "user1", "3/15 구약 😀"],
+            ["2024-01-02", "user1", "2/2~2/20 구약 😀"],
+        ])
+        result = analyze_chat(csv_text, track_mode="dual")
+        assert "user1" in result
+        # 상한 초과 메시지의 날짜는 포함되지 않아야 함
+        assert result["user1"]["dates_old"] == {"3/15"}
 
     def test_analyze_chat_dual__같은_날짜_여러_메시지__1회로_카운팅(self):
         csv_text = self._make_csv([
