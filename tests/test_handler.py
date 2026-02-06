@@ -3,7 +3,7 @@ from unittest.mock import patch
 
 import pytest
 
-from app.handler import PUBLIC_DIR, extract_multipart_file
+from app.handler import PUBLIC_DIR, extract_multipart_field, extract_multipart_file
 
 
 def _make_multipart_payload(field_name, filename, content, boundary="testboundary"):
@@ -15,6 +15,24 @@ def _make_multipart_payload(field_name, filename, content, boundary="testboundar
     ).encode("utf-8")
     body += content
     body += f"\r\n--{boundary}--\r\n".encode("utf-8")
+    return body, f"multipart/form-data; boundary={boundary}"
+
+
+def _make_multipart_with_field(file_name, file_content, field_name, field_value, boundary="testboundary"):
+    body = (
+        f"--{boundary}\r\n"
+        f'Content-Disposition: form-data; name="file"; filename="{file_name}"\r\n'
+        f"Content-Type: text/csv\r\n"
+        f"\r\n"
+    ).encode("utf-8")
+    body += file_content
+    body += (
+        f"\r\n--{boundary}\r\n"
+        f'Content-Disposition: form-data; name="{field_name}"\r\n'
+        f"\r\n"
+        f"{field_value}"
+        f"\r\n--{boundary}--\r\n"
+    ).encode("utf-8")
     return body, f"multipart/form-data; boundary={boundary}"
 
 
@@ -69,3 +87,30 @@ class TestResolvePublicPath:
     def test_resolve_public_path__double_dot_in_middle__returns_none(self):
         result = self._resolve("/subdir/../../etc/passwd")
         assert result is None
+
+
+class TestExtractMultipartField:
+    def test_extract_multipart_field__텍스트_필드_추출_성공(self):
+        payload, content_type = _make_multipart_with_field(
+            "test.csv", b"col1,col2", "track_mode", "dual",
+        )
+        result = extract_multipart_field(payload, content_type, "track_mode")
+        assert result == "dual"
+
+    def test_extract_multipart_field__존재하지_않는_필드__None_반환(self):
+        payload, content_type = _make_multipart_with_field(
+            "test.csv", b"col1,col2", "track_mode", "dual",
+        )
+        result = extract_multipart_field(payload, content_type, "nonexistent")
+        assert result is None
+
+    def test_extract_multipart_field__비_multipart__None_반환(self):
+        result = extract_multipart_field(b"plain text", "text/plain", "field")
+        assert result is None
+
+    def test_extract_multipart_field__single_값_추출(self):
+        payload, content_type = _make_multipart_with_field(
+            "test.csv", b"col1,col2", "track_mode", "single",
+        )
+        result = extract_multipart_field(payload, content_type, "track_mode")
+        assert result == "single"

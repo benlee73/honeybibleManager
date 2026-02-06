@@ -14,6 +14,34 @@ logger = get_logger("handler")
 PUBLIC_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "public")
 
 
+def _parse_multipart(payload, content_type):
+    header = f"Content-Type: {content_type}\r\n\r\n".encode("utf-8")
+    return BytesParser(policy=default).parsebytes(header + payload)
+
+
+def extract_multipart_field(payload, content_type, field_name):
+    try:
+        message = _parse_multipart(payload, content_type)
+    except Exception:
+        return None
+
+    if message.get_content_maintype() != "multipart":
+        return None
+
+    for part in message.iter_parts():
+        if part.get_content_disposition() != "form-data":
+            continue
+        name = part.get_param("name", header="content-disposition")
+        if name != field_name:
+            continue
+        data = part.get_payload(decode=True)
+        if data is None:
+            return None
+        return data.decode("utf-8", errors="replace").strip()
+
+    return None
+
+
 def extract_multipart_file(payload, content_type, field_name="file"):
     try:
         header = f"Content-Type: {content_type}\r\n\r\n".encode("utf-8")
@@ -156,9 +184,13 @@ class HoneyBibleHandler(BaseHTTPRequestHandler):
             self._send_json(400, {"message": "CSV file is empty"})
             return
 
+        track_mode = extract_multipart_field(payload, content_type, "track_mode")
+        if track_mode not in ("single", "dual"):
+            track_mode = "single"
+
         csv_text = decode_csv_payload(file_bytes)
-        users = analyze_chat(csv_text)
-        output_csv = build_output_csv(users)
+        users = analyze_chat(csv_text, track_mode=track_mode)
+        output_csv = build_output_csv(users, track_mode=track_mode)
         logger.info("분석 완료: %d명 처리", len(users))
 
         filename = "honeybible-results.csv"
