@@ -133,6 +133,19 @@ class TestAnalyzeChat:
         result = analyze_chat(csv_text)
         assert "user1" not in result
 
+    def test_analyze_chat__같은_날짜_여러_메시지__1회로_카운팅(self):
+        csv_text = self._make_csv([
+            ["날짜", "이름", "메시지"],
+            ["2024-01-01", "user1", "3/15😀"],
+            ["2024-01-02", "user1", "3/15😀"],
+            ["2024-01-03", "user1", "3/15😀"],
+            ["2024-01-04", "user1", "3/16😀"],
+        ])
+        result = analyze_chat(csv_text)
+        assert "user1" in result
+        assert result["user1"]["dates"] == {"3/15", "3/16"}
+        assert len(result["user1"]["dates"]) == 2
+
 
 class TestSortDates:
     def test_sort_dates__unordered__sorts_by_month_then_day(self):
@@ -264,6 +277,23 @@ class TestAnalyzeChatDual:
         assert result["user1"]["dates_new"] == set()
         assert result["user2"]["dates_old"] == {"2/3"}
         assert result["user2"]["dates_new"] == {"2/2", "2/3"}
+
+    def test_analyze_chat_dual__같은_날짜_여러_메시지__1회로_카운팅(self):
+        csv_text = self._make_csv([
+            ["날짜", "이름", "메시지"],
+            ["2024-01-01", "user1", "2/2 구약 😀"],
+            ["2024-01-02", "user1", "2/2 구약 😀"],
+            ["2024-01-03", "user1", "2/3 신약 😀"],
+            ["2024-01-04", "user1", "2/3 신약 😀"],
+            ["2024-01-05", "user1", "2/4 구약 신약 😀"],
+            ["2024-01-06", "user1", "2/4 구약 신약 😀"],
+        ])
+        result = analyze_chat(csv_text, track_mode="dual")
+        assert "user1" in result
+        assert result["user1"]["dates_old"] == {"2/2", "2/4"}
+        assert result["user1"]["dates_new"] == {"2/3", "2/4"}
+        assert len(result["user1"]["dates_old"]) == 2
+        assert len(result["user1"]["dates_new"]) == 2
 
     def test_analyze_chat_single__기존_동작_유지(self):
         csv_text = self._make_csv([
