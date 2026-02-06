@@ -208,16 +208,19 @@ const computeStats = (headers, rows, trackMode) => {
   const totalCells = rows.length * dateCount;
   const avgRate = totalCells > 0 ? Math.round((totalO / totalCells) * 100) : 0;
 
-  let topName = "-";
-  let topCount = 0;
-  for (const [name, count] of Object.entries(nameCounts)) {
-    if (count > topCount) {
-      topCount = count;
-      topName = name;
+  let perfectCount = 0;
+  const nameTotalCells = {};
+  rows.forEach((row) => {
+    const name = row[0];
+    nameTotalCells[name] = (nameTotalCells[name] || 0) + dateCount;
+  });
+  for (const [name, total] of Object.entries(nameTotalCells)) {
+    if (total > 0 && nameCounts[name] === total) {
+      perfectCount += 1;
     }
   }
 
-  return { members, dates: dateCount, avgRate, topName };
+  return { members, dates: dateCount, avgRate, perfectCount };
 };
 
 const animateValue = (element, end, duration, suffix) => {
@@ -280,14 +283,14 @@ const showResults = (csvText, trackMode) => {
   const stats = computeStats(headers, rows, trackMode);
 
   const statMembers = document.getElementById("statMembers");
+  const statPerfect = document.getElementById("statPerfect");
   const statDates = document.getElementById("statDates");
   const statAvg = document.getElementById("statAvg");
-  const statTop = document.getElementById("statTop");
 
   if (statMembers) animateValue(statMembers, stats.members, 600, "");
+  if (statPerfect) animateValue(statPerfect, stats.perfectCount, 600, "명");
   if (statDates) animateValue(statDates, stats.dates, 600, "");
   if (statAvg) animateValue(statAvg, stats.avgRate, 800, "%");
-  if (statTop) statTop.textContent = stats.topName;
 
   renderPreviewTable(headers, rows);
 
