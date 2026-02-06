@@ -7,6 +7,9 @@ from http.server import BaseHTTPRequestHandler
 from urllib.parse import unquote
 
 from app.analyzer import analyze_chat, build_output_csv, decode_csv_payload
+from app.logger import get_logger
+
+logger = get_logger("handler")
 
 PUBLIC_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "public")
 
@@ -38,6 +41,8 @@ class HoneyBibleHandler(BaseHTTPRequestHandler):
     server_version = "HoneyBibleServer/0.1"
 
     def _send_json(self, status_code, payload):
+        if status_code >= 400:
+            logger.warning("에러 응답 %d: %s", status_code, payload.get("message", ""))
         body = json.dumps(payload).encode("utf-8")
         self.send_response(status_code)
         self.send_header("Content-Type", "application/json; charset=utf-8")
@@ -66,6 +71,7 @@ class HoneyBibleHandler(BaseHTTPRequestHandler):
 
     def _send_file(self, file_path):
         if not file_path or not os.path.isfile(file_path):
+            logger.warning("파일 없음 404: %s", file_path)
             self.send_response(404)
             self.send_header("Content-Type", "text/plain; charset=utf-8")
             self.end_headers()
@@ -80,6 +86,7 @@ class HoneyBibleHandler(BaseHTTPRequestHandler):
             with open(file_path, "rb") as handle:
                 body = handle.read()
         except OSError:
+            logger.error("파일 읽기 실패 500: %s", file_path)
             self.send_response(500)
             self.send_header("Content-Type", "text/plain; charset=utf-8")
             self.end_headers()
@@ -98,6 +105,7 @@ class HoneyBibleHandler(BaseHTTPRequestHandler):
         self.end_headers()
 
     def do_GET(self):
+        logger.info("요청 수신: GET %s", self.path)
         if self.path.startswith("/analyze"):
             self._send_json(405, {"message": "Method not allowed"})
             return
@@ -106,6 +114,7 @@ class HoneyBibleHandler(BaseHTTPRequestHandler):
         self._send_file(file_path)
 
     def do_POST(self):
+        logger.info("요청 수신: POST %s", self.path)
         if self.path != "/analyze":
             self._send_json(404, {"message": "Not found"})
             return
@@ -150,6 +159,7 @@ class HoneyBibleHandler(BaseHTTPRequestHandler):
         csv_text = decode_csv_payload(file_bytes)
         users = analyze_chat(csv_text)
         output_csv = build_output_csv(users)
+        logger.info("분석 완료: %d명 처리", len(users))
 
         filename = "honeybible-results.csv"
         self.send_response(200)
