@@ -1,4 +1,4 @@
-@import url("https://fonts.googleapis.com/css2?family=Gowun+Batang:wght@400;700&family=Gowun+Dodum&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Gamja+Flower&display=swap");
 
 :root {
   --honey-1: #f7c452;
@@ -31,8 +31,8 @@
   --cheer-bg: linear-gradient(135deg, rgba(255, 248, 230, 0.95), rgba(255, 232, 198, 0.9));
   --heart-color: #f07b77;
   --heart-glow: rgba(240, 123, 119, 0.45);
-  --font-display: "Gowun Batang", "MaruBuri", "Nanum Myeongjo", "Apple SD Gothic Neo", "Malgun Gothic", serif;
-  --font-body: "Gowun Dodum", "Nanum Square Round", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+  --font-display: "Gamja Flower", "Apple SD Gothic Neo", "Malgun Gothic", cursive;
+  --font-body: "Gamja Flower", "Apple SD Gothic Neo", "Malgun Gothic", cursive;
 }
 
 [data-theme="dark"] {
