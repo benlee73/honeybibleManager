@@ -1,43 +1,6 @@
 const API_ENDPOINT = "/analyze";
 
-const THEME_KEY = "honeybible-theme";
-const themeToggle = document.getElementById("themeToggle");
-const themeIcon = themeToggle ? themeToggle.querySelector(".theme-icon") : null;
-const themeLabel = themeToggle ? themeToggle.querySelector(".theme-label") : null;
 const cheerButton = document.getElementById("cheerButton");
-
-const applyTheme = (theme, persist) => {
-  document.documentElement.dataset.theme = theme;
-  if (themeToggle) {
-    const isDark = theme === "dark";
-    themeToggle.setAttribute("aria-pressed", String(isDark));
-    if (themeIcon) {
-      themeIcon.textContent = isDark ? "☀️" : "🌙";
-    }
-    if (themeLabel) {
-      themeLabel.textContent = isDark ? "라이트 모드" : "다크 모드";
-    }
-  }
-  if (persist) {
-    localStorage.setItem(THEME_KEY, theme);
-  }
-};
-
-if (themeToggle) {
-  const storedTheme = localStorage.getItem(THEME_KEY);
-  const prefersDark = window.matchMedia &&
-    window.matchMedia("(prefers-color-scheme: dark)").matches;
-  const initialTheme = storedTheme || (prefersDark ? "dark" : "light");
-
-  applyTheme(initialTheme, Boolean(storedTheme));
-
-  themeToggle.addEventListener("click", () => {
-    const nextTheme = document.documentElement.dataset.theme === "dark"
-      ? "light"
-      : "dark";
-    applyTheme(nextTheme, true);
-  });
-}
 
 const spawnHearts = (originX, originY) => {
   if (!cheerButton) {
