@@ -122,3 +122,12 @@ class TestExtractTrailingEmoji:
     def test_extract_trailing_emoji__consecutive_trailing_emojis__returns_combined(self):
         result = extract_trailing_emoji("hello🔥😀")
         assert result == "🔥😀"
+
+    def test_extract_trailing_emoji__텍스트_이모티콘__괄호_포함_반환(self):
+        assert extract_trailing_emoji("2/2 구약 신약 (무표정)") == "(무표정)"
+
+    def test_extract_trailing_emoji__텍스트_이모티콘_공백없이__반환(self):
+        assert extract_trailing_emoji("2/2 신약(연필)") == "(연필)"
+
+    def test_extract_trailing_emoji__괄호_안_비한글__None_반환(self):
+        assert extract_trailing_emoji("PART 1 (2/2 ~ 5/30)") is None

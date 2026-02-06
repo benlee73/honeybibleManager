@@ -1,3 +1,7 @@
+import re
+
+TEXT_EMOTICON_PATTERN = re.compile(r"\(([가-힣]+)\)\s*$")
+
 EMOJI_RANGES = [
     (0x1F300, 0x1F5FF),
     (0x1F600, 0x1F64F),
@@ -63,6 +67,11 @@ def extract_trailing_emoji(text):
     trimmed = text.rstrip()
     if not trimmed:
         return None
+
+    # 텍스트 이모티콘 검사: (한글) 패턴이 메시지 끝에 있으면 반환
+    m = TEXT_EMOTICON_PATTERN.search(trimmed)
+    if m:
+        return m.group(0)
 
     index = 0
     last_emoji = None

@@ -330,6 +330,25 @@ class TestAnalyzeChatDual:
         assert len(result["user1"]["dates_old"]) == 2
         assert len(result["user1"]["dates_new"]) == 2
 
+    def test_analyze_chat_dual__텍스트_이모티콘_사용자__정상_분석(self):
+        csv_text = self._make_csv([
+            ["날짜", "이름", "메시지"],
+            ["2024-01-01", "광천 강창우", "2/2 구약 신약 (무표정)"],
+            ["2024-01-02", "광천 강창우", "2/4 구약 신약 (무표정)"],
+            ["2024-01-03", "광천 김형은", "2/2~3 구약 신약(연필)"],
+            ["2024-01-04", "광천 김형은", "2/3~6 구약 신약(연필)"],
+        ])
+        result = analyze_chat(csv_text, track_mode="dual")
+        assert "광천 강창우" in result
+        assert result["광천 강창우"]["emoji"] == "(무표정)"
+        assert result["광천 강창우"]["dates_old"] == {"2/2", "2/4"}
+        assert result["광천 강창우"]["dates_new"] == {"2/2", "2/4"}
+
+        assert "광천 김형은" in result
+        assert result["광천 김형은"]["emoji"] == "(연필)"
+        assert result["광천 김형은"]["dates_old"] == {"2/2", "2/3", "2/4", "2/5", "2/6"}
+        assert result["광천 김형은"]["dates_new"] == {"2/2", "2/3", "2/4", "2/5", "2/6"}
+
     def test_analyze_chat_single__기존_동작_유지(self):
         csv_text = self._make_csv([
             ["날짜", "이름", "메시지"],
