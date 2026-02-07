@@ -1,6 +1,9 @@
 import csv
 import io
 
+from openpyxl import Workbook
+from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
+
 from app.date_parser import DATE_TIME_PATTERN, parse_dates
 from app.emoji import extract_trailing_emoji, normalize_emoji
 
@@ -198,3 +201,103 @@ def build_output_csv(users, track_mode="single"):
             writer.writerow(row)
 
     return output.getvalue().encode("utf-8-sig")
+
+
+def build_preview_data(users, track_mode="single"):
+    if track_mode == "dual":
+        all_dates = set()
+        for entry in users.values():
+            all_dates.update(entry.get("dates_old", set()))
+            all_dates.update(entry.get("dates_new", set()))
+        all_dates_sorted = sort_dates(all_dates)
+
+        headers = ["이름", "이모티콘", "트랙"]
+        headers.extend(all_dates_sorted)
+
+        rows = []
+        all_users = sorted(
+            u for u, e in users.items()
+            if e.get("dates_old") or e.get("dates_new")
+        )
+        for user in all_users:
+            entry = users[user]
+            if entry.get("dates_old"):
+                row = [user, entry.get("emoji", ""), "구약"]
+                row.extend("O" if d in entry["dates_old"] else "" for d in all_dates_sorted)
+                rows.append(row)
+            if entry.get("dates_new"):
+                row = [user, entry.get("emoji", ""), "신약"]
+                row.extend("O" if d in entry["dates_new"] else "" for d in all_dates_sorted)
+                rows.append(row)
+    else:
+        user_dates = {}
+        all_dates = set()
+        for user, entry in users.items():
+            if not entry["dates"]:
+                continue
+            user_dates[user] = entry["dates"]
+            all_dates.update(entry["dates"])
+
+        all_dates_sorted = sort_dates(all_dates)
+
+        headers = ["이름", "이모티콘"]
+        headers.extend(all_dates_sorted)
+
+        rows = []
+        for user in sorted(user_dates.keys()):
+            entry = users[user]
+            date_set = user_dates[user]
+            row = [user, entry.get("emoji", "")]
+            row.extend("O" if d in date_set else "" for d in all_dates_sorted)
+            rows.append(row)
+
+    return headers, rows
+
+
+def build_output_xlsx(users, track_mode="single"):
+    headers, rows = build_preview_data(users, track_mode)
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "꿀성경 진도표"
+
+    header_fill = PatternFill(start_color="FFF6E2", end_color="FFF6E2", fill_type="solid")
+    header_font = Font(name="맑은 고딕", bold=True, size=11, color="4A2D14")
+    header_border = Border(bottom=Side(style="medium", color="C46B12"))
+
+    body_font = Font(name="맑은 고딕", size=11, color="2A1A08")
+    mark_font = Font(name="맑은 고딕", bold=True, size=11, color="E39B2F")
+    row_border = Border(bottom=Side(style="thin", color="D4C4A8"))
+    center_align = Alignment(horizontal="center", vertical="center")
+
+    for col_idx, value in enumerate(headers, start=1):
+        cell = ws.cell(row=1, column=col_idx, value=value)
+        cell.fill = header_fill
+        cell.font = header_font
+        cell.border = header_border
+        cell.alignment = center_align
+
+    for row_idx, row_data in enumerate(rows, start=2):
+        for col_idx, value in enumerate(row_data, start=1):
+            cell = ws.cell(row=row_idx, column=col_idx, value=value)
+            if value == "O":
+                cell.font = mark_font
+            else:
+                cell.font = body_font
+            cell.border = row_border
+            cell.alignment = center_align
+
+    date_start = 3 if track_mode == "dual" else 2
+    ws.column_dimensions["A"].width = 16
+    ws.column_dimensions["B"].width = 8
+    if track_mode == "dual":
+        ws.column_dimensions["C"].width = 8
+    for col_idx in range(date_start + 1, len(headers) + 1):
+        col_letter = ws.cell(row=1, column=col_idx).column_letter
+        ws.column_dimensions[col_letter].width = 7
+
+    ws.freeze_panes = "A2"
+
+    buf = io.BytesIO()
+    wb.save(buf)
+    return buf.getvalue()

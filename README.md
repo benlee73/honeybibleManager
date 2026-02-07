@@ -54,7 +54,7 @@ poetry run python -m pytest tests/ -v
 ## 엔드포인트
 - POST /analyze (multipart/form-data)
   - 필드 이름: `file` (CSV 파일), `track_mode` (`"single"` 또는 `"dual"`, 기본값 `"single"`)
-  - 응답: CSV 파일 다운로드 (UTF-8 with BOM)
+  - 응답: JSON (`xlsx_base64`, `filename`, `preview`)
 
 ## 정적 파일
 - 프론트 파일은 `public/`에 위치합니다.
@@ -95,4 +95,4 @@ python3 server.py --host 0.0.0.0 --port $PORT
   - ~~구약/신약 트랙을 구분하여 날짜를 별도로 수집~~
 - ~~중복 허용~~
   - ~~동일 날짜 다중 인증 시 1회 카운팅 (기존 동작 유지, 테스트 추가)~~
-- 결과 csv 말고 엑셀같은 걸로 해서 더 이쁘게 보여주기
+- ~~결과 csv 말고 엑셀같은 걸로 해서 더 이쁘게 보여주기~~

@@ -1,3 +1,4 @@
+import base64
 import json
 import mimetypes
 import os
@@ -6,7 +7,12 @@ from email.policy import default
 from http.server import BaseHTTPRequestHandler
 from urllib.parse import unquote
 
-from app.analyzer import analyze_chat, build_output_csv, decode_csv_payload
+from app.analyzer import (
+    analyze_chat,
+    build_output_xlsx,
+    build_preview_data,
+    decode_csv_payload,
+)
 from app.logger import get_logger
 
 logger = get_logger("handler")
@@ -190,17 +196,12 @@ class HoneyBibleHandler(BaseHTTPRequestHandler):
 
         csv_text = decode_csv_payload(file_bytes)
         users = analyze_chat(csv_text, track_mode=track_mode)
-        output_csv = build_output_csv(users, track_mode=track_mode)
+        xlsx_bytes = build_output_xlsx(users, track_mode=track_mode)
+        headers, rows = build_preview_data(users, track_mode=track_mode)
         logger.info("분석 완료: %d명 처리", len(users))
 
-        filename = "honeybible-results.csv"
-        self.send_response(200)
-        self.send_header("Content-Type", "text/csv; charset=utf-8")
-        self.send_header(
-            "Content-Disposition",
-            f'attachment; filename="{filename}"',
-        )
-        self.send_header("Content-Length", str(len(output_csv)))
-        self._send_cors()
-        self.end_headers()
-        self.wfile.write(output_csv)
+        self._send_json(200, {
+            "xlsx_base64": base64.b64encode(xlsx_bytes).decode("ascii"),
+            "filename": "honeybible-results.xlsx",
+            "preview": {"headers": headers, "rows": rows},
+        })

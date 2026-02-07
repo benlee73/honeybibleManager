@@ -99,22 +99,6 @@ const formatBytes = (bytes) => {
   return `${value.toFixed(value >= 10 || unitIndex === 0 ? 0 : 1)} ${units[unitIndex]}`;
 };
 
-const parseFilename = (contentDisposition) => {
-  if (!contentDisposition) {
-    return null;
-  }
-  const utf8Match = contentDisposition.match(/filename\*=UTF-8''([^;]+)/i);
-  if (utf8Match) {
-    try {
-      return decodeURIComponent(utf8Match[1]);
-    } catch (error) {
-      return utf8Match[1];
-    }
-  }
-  const asciiMatch = contentDisposition.match(/filename="?([^";]+)"?/i);
-  return asciiMatch ? asciiMatch[1] : null;
-};
-
 const readErrorMessage = async (response) => {
   const contentType = response.headers.get("Content-Type") || "";
   try {
@@ -143,44 +127,6 @@ const hideResults = () => {
   if (resultsSection) {
     resultsSection.hidden = true;
   }
-};
-
-const parseCsvText = (text) => {
-  const cleaned = text.replace(/^\uFEFF/, "");
-  const lines = cleaned.split(/\r?\n/).filter((line) => line.trim());
-  if (lines.length === 0) {
-    return { headers: [], rows: [] };
-  }
-  const parse = (line) => {
-    const result = [];
-    let current = "";
-    let inQuotes = false;
-    for (let i = 0; i < line.length; i += 1) {
-      const ch = line[i];
-      if (inQuotes) {
-        if (ch === '"' && line[i + 1] === '"') {
-          current += '"';
-          i += 1;
-        } else if (ch === '"') {
-          inQuotes = false;
-        } else {
-          current += ch;
-        }
-      } else if (ch === '"') {
-        inQuotes = true;
-      } else if (ch === ",") {
-        result.push(current);
-        current = "";
-      } else {
-        current += ch;
-      }
-    }
-    result.push(current);
-    return result;
-  };
-  const headers = parse(lines[0]);
-  const rows = lines.slice(1).map(parse);
-  return { headers, rows };
 };
 
 const computeStats = (headers, rows, trackMode) => {
@@ -271,11 +217,10 @@ const renderPreviewTable = (headers, rows) => {
   previewTable.appendChild(tbody);
 };
 
-const showResults = (csvText, trackMode) => {
+const showResults = (headers, rows, trackMode) => {
   if (!resultsSection) {
     return;
   }
-  const { headers, rows } = parseCsvText(csvText);
   if (headers.length === 0) {
     return;
   }
@@ -356,17 +301,23 @@ form.addEventListener("submit", async (event) => {
       throw new Error(await readErrorMessage(response));
     }
 
-    const blob = await response.blob();
-    const filename =
-      parseFilename(response.headers.get("Content-Disposition")) ||
-      "honeybible-results.csv";
+    const data = await response.json();
+    const xlsxBinary = atob(data.xlsx_base64);
+    const xlsxArray = new Uint8Array(xlsxBinary.length);
+    for (let i = 0; i < xlsxBinary.length; i += 1) {
+      xlsxArray[i] = xlsxBinary.charCodeAt(i);
+    }
+    const blob = new Blob([xlsxArray], {
+      type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    });
+    const filename = data.filename || "honeybible-results.xlsx";
 
     clearObjectUrl();
     currentObjectUrl = URL.createObjectURL(blob);
 
     setStatus("success", "분석 완료! 고양이가 결과를 배달 중...");
 
-    const csvText = await blob.text();
+    const { headers, rows } = data.preview;
 
     if (ziplineCat) {
       ziplineCat.classList.add("sliding");
@@ -378,7 +329,7 @@ form.addEventListener("submit", async (event) => {
         downloadButton.setAttribute("aria-disabled", "false");
         ziplineCat.classList.remove("sliding");
         setStatus("success", "다운로드 준비가 끝났습니다.");
-        showResults(csvText, trackMode);
+        showResults(headers, rows, trackMode);
       });
     } else {
       downloadButton.href = currentObjectUrl;
@@ -386,7 +337,7 @@ form.addEventListener("submit", async (event) => {
       downloadButton.classList.remove("is-disabled");
       downloadButton.setAttribute("aria-disabled", "false");
       setStatus("success", "분석 완료. 다운로드 준비가 끝났습니다.");
-      showResults(csvText, trackMode);
+      showResults(headers, rows, trackMode);
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : "분석에 실패했습니다.";

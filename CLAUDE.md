@@ -6,7 +6,7 @@
 
 ## 기술 스택
 
-- Python 3.12+ (외부 런타임 의존성 없음, 표준 라이브러리만 사용)
+- Python 3.12+ / openpyxl (XLSX 생성)
 - 의존성 관리: Poetry
 - 테스트: pytest (dev 의존성)
 
@@ -16,7 +16,7 @@
 server.py              # 진입점. HTTPServer 실행 (--host, --port)
 app/
   handler.py           # HoneyBibleHandler: HTTP 요청 처리 (GET 정적파일, POST /analyze), extract_multipart_field()
-  analyzer.py          # analyze_chat(), build_output_csv(), extract_tracks(): CSV 분석/결과 생성/트랙 감지
+  analyzer.py          # analyze_chat(), build_output_csv(), build_preview_data(), build_output_xlsx(), extract_tracks(): CSV 분석/결과 생성/트랙 감지
   date_parser.py       # parse_dates(): 메시지에서 날짜 파싱 (범위~, 쉼표, M/D 형식)
   emoji.py             # extract_trailing_emoji(), normalize_emoji(): 이모티콘 추출/정규화
   logger.py            # setup_logging(), get_logger(): 콘솔+파일(server.log) 로깅 설정
@@ -30,7 +30,7 @@ public/                # 프론트엔드 정적 파일 (index.html, app.js, styl
 2. `handler.py`가 multipart 데이터에서 파일과 트랙 모드 추출
 3. `analyzer.py`가 CSV를 파싱하고 사용자별 이모티콘 할당 및 날짜 수집 (투트랙 모드 시 구약/신약 분리)
 4. `date_parser.py`와 `emoji.py`가 각각 날짜/이모티콘 추출 담당
-5. 결과를 UTF-8 BOM CSV로 변환하여 반환
+5. 결과를 스타일 적용된 XLSX로 변환하고, JSON 응답(xlsx_base64 + preview 데이터)으로 반환
 
 ## 분석 규칙 요약
 

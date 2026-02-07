@@ -6,6 +6,8 @@ import pytest
 from app.analyzer import (
     analyze_chat,
     build_output_csv,
+    build_output_xlsx,
+    build_preview_data,
     choose_assigned_emoji,
     decode_csv_payload,
     extract_tracks,
@@ -434,3 +436,163 @@ class TestBuildOutputCsvDual:
         rows = list(reader)
         assert len(rows) == 1
         assert rows[0][:3] == ["이름", "이모티콘", "트랙"]
+
+
+class TestBuildPreviewData:
+    def test_build_preview_data__single__헤더와_행_구조(self):
+        users = {
+            "user1": {"dates": {"3/15", "3/16"}, "emoji": "😀"},
+            "user2": {"dates": {"1/5"}, "emoji": "🔥"},
+        }
+        headers, rows = build_preview_data(users)
+        assert headers[0] == "이름"
+        assert headers[1] == "이모티콘"
+        assert headers[2:] == ["1/5", "3/15", "3/16"]
+        assert len(rows) == 2
+
+    def test_build_preview_data__dual__트랙_컬럼_포함(self):
+        users = {
+            "user1": {"dates_old": {"2/2"}, "dates_new": {"2/3"}, "emoji": "😀"},
+        }
+        headers, rows = build_preview_data(users, track_mode="dual")
+        assert headers[:3] == ["이름", "이모티콘", "트랙"]
+        assert len(rows) == 2
+        assert rows[0][2] == "구약"
+        assert rows[1][2] == "신약"
+
+    def test_build_preview_data__빈_사용자__행_없음(self):
+        headers, rows = build_preview_data({})
+        assert headers == ["이름", "이모티콘"]
+        assert rows == []
+
+    def test_build_preview_data__빈_날짜_사용자_제외(self):
+        users = {
+            "user1": {"dates": set(), "emoji": "😀"},
+            "user2": {"dates": {"3/15"}, "emoji": "🔥"},
+        }
+        headers, rows = build_preview_data(users)
+        assert len(rows) == 1
+        assert rows[0][0] == "user2"
+
+    def test_build_preview_data__O_마크_정확(self):
+        users = {
+            "user1": {"dates": {"2/2", "2/4"}, "emoji": "😀"},
+        }
+        headers, rows = build_preview_data(users)
+        assert headers[2:] == ["2/2", "2/4"]
+        assert rows[0][2:] == ["O", "O"]
+
+    def test_build_preview_data__csv와_동일_데이터_single(self):
+        users = {
+            "user1": {"dates": {"3/15", "3/16"}, "emoji": "😀"},
+            "user2": {"dates": {"1/5"}, "emoji": "🔥"},
+        }
+        headers, rows = build_preview_data(users)
+        csv_output = build_output_csv(users)
+        csv_text = csv_output.decode("utf-8-sig")
+        reader = csv.reader(io.StringIO(csv_text, newline=""))
+        csv_rows = list(reader)
+        assert headers == csv_rows[0]
+        assert rows == csv_rows[1:]
+
+    def test_build_preview_data__csv와_동일_데이터_dual(self):
+        users = {
+            "user1": {"dates_old": {"2/2"}, "dates_new": {"2/3"}, "emoji": "😀"},
+        }
+        headers, rows = build_preview_data(users, track_mode="dual")
+        csv_output = build_output_csv(users, track_mode="dual")
+        csv_text = csv_output.decode("utf-8-sig")
+        reader = csv.reader(io.StringIO(csv_text, newline=""))
+        csv_rows = list(reader)
+        assert headers == csv_rows[0]
+        assert rows == csv_rows[1:]
+
+
+class TestBuildOutputXlsx:
+    def test_build_output_xlsx__반환값이_bytes(self):
+        users = {"user1": {"dates": {"3/15"}, "emoji": "😀"}}
+        result = build_output_xlsx(users)
+        assert isinstance(result, bytes)
+        assert len(result) > 0
+
+    def test_build_output_xlsx__유효한_xlsx_파일(self):
+        from openpyxl import load_workbook
+        users = {"user1": {"dates": {"3/15"}, "emoji": "😀"}}
+        result = build_output_xlsx(users)
+        wb = load_workbook(io.BytesIO(result))
+        ws = wb.active
+        assert ws.title == "꿀성경 진도표"
+
+    def test_build_output_xlsx__헤더_행_내용(self):
+        from openpyxl import load_workbook
+        users = {
+            "user1": {"dates": {"2/2", "2/3"}, "emoji": "😀"},
+        }
+        result = build_output_xlsx(users)
+        wb = load_workbook(io.BytesIO(result))
+        ws = wb.active
+        assert ws.cell(1, 1).value == "이름"
+        assert ws.cell(1, 2).value == "이모티콘"
+        assert ws.cell(1, 3).value == "2/2"
+        assert ws.cell(1, 4).value == "2/3"
+
+    def test_build_output_xlsx__데이터_행_O_마크(self):
+        from openpyxl import load_workbook
+        users = {
+            "user1": {"dates": {"2/2"}, "emoji": "😀"},
+        }
+        result = build_output_xlsx(users)
+        wb = load_workbook(io.BytesIO(result))
+        ws = wb.active
+        assert ws.cell(2, 1).value == "user1"
+        assert ws.cell(2, 2).value == "😀"
+        assert ws.cell(2, 3).value == "O"
+
+    def test_build_output_xlsx__헤더_스타일(self):
+        from openpyxl import load_workbook
+        users = {"user1": {"dates": {"3/15"}, "emoji": "😀"}}
+        result = build_output_xlsx(users)
+        wb = load_workbook(io.BytesIO(result))
+        ws = wb.active
+        cell = ws.cell(1, 1)
+        assert cell.font.bold is True
+        assert cell.fill.start_color.rgb == "00FFF6E2"
+
+    def test_build_output_xlsx__O_마크_폰트_스타일(self):
+        from openpyxl import load_workbook
+        users = {"user1": {"dates": {"3/15"}, "emoji": "😀"}}
+        result = build_output_xlsx(users)
+        wb = load_workbook(io.BytesIO(result))
+        ws = wb.active
+        mark_cell = ws.cell(2, 3)
+        assert mark_cell.value == "O"
+        assert mark_cell.font.bold is True
+        assert mark_cell.font.color.rgb == "00E39B2F"
+
+    def test_build_output_xlsx__고정_틀(self):
+        from openpyxl import load_workbook
+        users = {"user1": {"dates": {"3/15"}, "emoji": "😀"}}
+        result = build_output_xlsx(users)
+        wb = load_workbook(io.BytesIO(result))
+        ws = wb.active
+        assert ws.freeze_panes == "A2"
+
+    def test_build_output_xlsx__dual_모드(self):
+        from openpyxl import load_workbook
+        users = {
+            "user1": {"dates_old": {"2/2"}, "dates_new": {"2/3"}, "emoji": "😀"},
+        }
+        result = build_output_xlsx(users, track_mode="dual")
+        wb = load_workbook(io.BytesIO(result))
+        ws = wb.active
+        assert ws.cell(1, 3).value == "트랙"
+        assert ws.cell(2, 3).value == "구약"
+        assert ws.cell(3, 3).value == "신약"
+
+    def test_build_output_xlsx__빈_사용자__헤더만(self):
+        from openpyxl import load_workbook
+        result = build_output_xlsx({})
+        wb = load_workbook(io.BytesIO(result))
+        ws = wb.active
+        assert ws.cell(1, 1).value == "이름"
+        assert ws.cell(2, 1).value is None
