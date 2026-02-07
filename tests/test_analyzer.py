@@ -577,17 +577,122 @@ class TestBuildOutputXlsx:
         ws = wb.active
         assert ws.freeze_panes == "A2"
 
-    def test_build_output_xlsx__dual_모드(self):
+    def test_build_output_xlsx__dual_모드__시트_2개_생성(self):
         from openpyxl import load_workbook
         users = {
             "user1": {"dates_old": {"2/2"}, "dates_new": {"2/3"}, "emoji": "😀"},
         }
         result = build_output_xlsx(users, track_mode="dual")
         wb = load_workbook(io.BytesIO(result))
-        ws = wb.active
-        assert ws.cell(1, 3).value == "트랙"
-        assert ws.cell(2, 3).value == "구약"
-        assert ws.cell(3, 3).value == "신약"
+        assert len(wb.sheetnames) == 2
+
+    def test_build_output_xlsx__dual_모드__시트_이름(self):
+        from openpyxl import load_workbook
+        users = {
+            "user1": {"dates_old": {"2/2"}, "dates_new": {"2/3"}, "emoji": "😀"},
+        }
+        result = build_output_xlsx(users, track_mode="dual")
+        wb = load_workbook(io.BytesIO(result))
+        assert wb.sheetnames == ["구약 진도표", "신약 진도표"]
+
+    def test_build_output_xlsx__dual_모드__트랙_컬럼_없음(self):
+        from openpyxl import load_workbook
+        users = {
+            "user1": {"dates_old": {"2/2"}, "dates_new": {"2/3"}, "emoji": "😀"},
+        }
+        result = build_output_xlsx(users, track_mode="dual")
+        wb = load_workbook(io.BytesIO(result))
+        ws_old = wb["구약 진도표"]
+        ws_new = wb["신약 진도표"]
+        # 헤더에 "트랙" 컬럼이 없어야 함
+        old_headers = [ws_old.cell(1, c).value for c in range(1, ws_old.max_column + 1)]
+        new_headers = [ws_new.cell(1, c).value for c in range(1, ws_new.max_column + 1)]
+        assert "트랙" not in old_headers
+        assert "트랙" not in new_headers
+
+    def test_build_output_xlsx__dual_모드__구약_시트_데이터(self):
+        from openpyxl import load_workbook
+        users = {
+            "user1": {"dates_old": {"2/2"}, "dates_new": {"2/3"}, "emoji": "😀"},
+        }
+        result = build_output_xlsx(users, track_mode="dual")
+        wb = load_workbook(io.BytesIO(result))
+        ws_old = wb["구약 진도표"]
+        assert ws_old.cell(1, 1).value == "이름"
+        assert ws_old.cell(1, 2).value == "이모티콘"
+        assert ws_old.cell(1, 3).value == "2/2"
+        assert ws_old.cell(2, 1).value == "user1"
+        assert ws_old.cell(2, 3).value == "O"
+
+    def test_build_output_xlsx__dual_모드__신약_시트_데이터(self):
+        from openpyxl import load_workbook
+        users = {
+            "user1": {"dates_old": {"2/2"}, "dates_new": {"2/3"}, "emoji": "😀"},
+        }
+        result = build_output_xlsx(users, track_mode="dual")
+        wb = load_workbook(io.BytesIO(result))
+        ws_new = wb["신약 진도표"]
+        assert ws_new.cell(1, 1).value == "이름"
+        assert ws_new.cell(1, 2).value == "이모티콘"
+        assert ws_new.cell(1, 3).value == "2/3"
+        assert ws_new.cell(2, 1).value == "user1"
+        assert ws_new.cell(2, 3).value == "O"
+
+    def test_build_output_xlsx__dual_모드__한쪽_트랙만_있는_사용자(self):
+        from openpyxl import load_workbook
+        users = {
+            "user1": {"dates_old": {"2/2"}, "dates_new": set(), "emoji": "😀"},
+            "user2": {"dates_old": set(), "dates_new": {"2/3"}, "emoji": "🔥"},
+        }
+        result = build_output_xlsx(users, track_mode="dual")
+        wb = load_workbook(io.BytesIO(result))
+        ws_old = wb["구약 진도표"]
+        ws_new = wb["신약 진도표"]
+        # 구약 시트에는 user1만
+        assert ws_old.cell(2, 1).value == "user1"
+        assert ws_old.cell(3, 1).value is None
+        # 신약 시트에는 user2만
+        assert ws_new.cell(2, 1).value == "user2"
+        assert ws_new.cell(3, 1).value is None
+
+    def test_build_output_xlsx__dual_모드__각_시트_스타일_적용(self):
+        from openpyxl import load_workbook
+        users = {
+            "user1": {"dates_old": {"2/2"}, "dates_new": {"2/3"}, "emoji": "😀"},
+        }
+        result = build_output_xlsx(users, track_mode="dual")
+        wb = load_workbook(io.BytesIO(result))
+        for sheet_name in ["구약 진도표", "신약 진도표"]:
+            ws = wb[sheet_name]
+            # 헤더 스타일
+            assert ws.cell(1, 1).font.bold is True
+            assert ws.cell(1, 1).fill.start_color.rgb == "00FFF6E2"
+            # O 마크 스타일
+            assert ws.cell(2, 3).value == "O"
+            assert ws.cell(2, 3).font.bold is True
+            assert ws.cell(2, 3).font.color.rgb == "00E39B2F"
+            # 고정 틀
+            assert ws.freeze_panes == "A2"
+
+    def test_build_output_xlsx__dual_모드__각_시트_날짜_독립(self):
+        from openpyxl import load_workbook
+        users = {
+            "user1": {
+                "dates_old": {"2/2", "2/4"},
+                "dates_new": {"2/3", "2/5"},
+                "emoji": "😀",
+            },
+        }
+        result = build_output_xlsx(users, track_mode="dual")
+        wb = load_workbook(io.BytesIO(result))
+        ws_old = wb["구약 진도표"]
+        ws_new = wb["신약 진도표"]
+        # 구약 시트 날짜 컬럼: 2/2, 2/4만
+        old_dates = [ws_old.cell(1, c).value for c in range(3, ws_old.max_column + 1)]
+        assert old_dates == ["2/2", "2/4"]
+        # 신약 시트 날짜 컬럼: 2/3, 2/5만
+        new_dates = [ws_new.cell(1, c).value for c in range(3, ws_new.max_column + 1)]
+        assert new_dates == ["2/3", "2/5"]
 
     def test_build_output_xlsx__빈_사용자__헤더만(self):
         from openpyxl import load_workbook
