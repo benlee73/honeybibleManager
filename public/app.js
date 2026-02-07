@@ -51,7 +51,9 @@ const fileMeta = document.getElementById("fileMeta");
 
 const resultsSection = document.getElementById("results");
 const previewTable = document.getElementById("previewTable");
-const ziplineCat = document.getElementById("ziplineCat");
+const progressBar = document.getElementById("progressBar");
+const progressFill = document.getElementById("progressFill");
+const progressText = document.getElementById("progressText");
 
 let currentObjectUrl = null;
 
@@ -73,8 +75,10 @@ const resetDownload = () => {
   downloadButton.setAttribute("aria-disabled", "true");
   downloadButton.removeAttribute("href");
   downloadButton.removeAttribute("download");
-  if (ziplineCat) {
-    ziplineCat.classList.remove("sliding");
+  if (progressBar) {
+    progressBar.hidden = true;
+    progressFill.style.width = "0%";
+    progressText.textContent = "0%";
   }
 };
 
@@ -126,6 +130,7 @@ const setFormEnabled = (enabled) => {
 const hideResults = () => {
   if (resultsSection) {
     resultsSection.hidden = true;
+    resultsSection.classList.remove("pop-in");
   }
 };
 
@@ -243,6 +248,30 @@ const showResults = (headers, rows, trackMode) => {
   resultsSection.scrollIntoView({ behavior: "smooth" });
 };
 
+const setProgress = (percent) => {
+  if (!progressBar) return;
+  progressBar.hidden = false;
+  progressFill.style.width = `${percent}%`;
+  progressText.textContent = `${percent}%`;
+};
+
+const animateProgress = (from, to, duration, callback) => {
+  const startTime = performance.now();
+  const step = (now) => {
+    const elapsed = now - startTime;
+    const progress = Math.min(elapsed / duration, 1);
+    const eased = 1 - Math.pow(1 - progress, 3);
+    const current = Math.round(from + (to - from) * eased);
+    setProgress(current);
+    if (progress < 1) {
+      requestAnimationFrame(step);
+    } else if (callback) {
+      callback();
+    }
+  };
+  requestAnimationFrame(step);
+};
+
 fileInput.addEventListener("change", () => {
   const file = fileInput.files[0];
 
@@ -284,7 +313,10 @@ form.addEventListener("submit", async (event) => {
 
   resetDownload();
   setFormEnabled(false);
+  setProgress(0);
   setStatus("loading", "CSV를 분석하는 중입니다. 잠시만 기다려주세요...");
+
+  setProgress(0);
 
   try {
     const formData = new FormData();
@@ -292,10 +324,16 @@ form.addEventListener("submit", async (event) => {
     const trackMode = document.querySelector('input[name="trackMode"]:checked').value;
     formData.append("track_mode", trackMode);
 
-    const response = await fetch(API_ENDPOINT, {
+    const fetchPromise = fetch(API_ENDPOINT, {
       method: "POST",
       body: formData,
     });
+
+    const progressPromise = new Promise((resolve) => {
+      animateProgress(0, 100, 1000, resolve);
+    });
+
+    const [response] = await Promise.all([fetchPromise, progressPromise]);
 
     if (!response.ok) {
       throw new Error(await readErrorMessage(response));
@@ -315,30 +353,15 @@ form.addEventListener("submit", async (event) => {
     clearObjectUrl();
     currentObjectUrl = URL.createObjectURL(blob);
 
-    setStatus("success", "분석 완료! 고양이가 결과를 배달 중...");
-
     const { headers, rows } = data.preview;
 
-    if (ziplineCat) {
-      ziplineCat.classList.add("sliding");
-      ziplineCat.addEventListener("animationend", function onSlideEnd() {
-        ziplineCat.removeEventListener("animationend", onSlideEnd);
-        downloadButton.href = currentObjectUrl;
-        downloadButton.download = filename;
-        downloadButton.classList.remove("is-disabled");
-        downloadButton.setAttribute("aria-disabled", "false");
-        ziplineCat.classList.remove("sliding");
-        setStatus("success", "다운로드 준비가 끝났습니다.");
-        showResults(headers, rows, trackMode);
-      });
-    } else {
-      downloadButton.href = currentObjectUrl;
-      downloadButton.download = filename;
-      downloadButton.classList.remove("is-disabled");
-      downloadButton.setAttribute("aria-disabled", "false");
-      setStatus("success", "분석 완료. 다운로드 준비가 끝났습니다.");
-      showResults(headers, rows, trackMode);
-    }
+    setStatus("success", "다운로드 준비가 끝났습니다.");
+    resultsSection.classList.add("pop-in");
+    showResults(headers, rows, trackMode);
+    downloadButton.href = currentObjectUrl;
+    downloadButton.download = filename;
+    downloadButton.classList.remove("is-disabled");
+    downloadButton.setAttribute("aria-disabled", "false");
   } catch (error) {
     const message = error instanceof Error ? error.message : "분석에 실패했습니다.";
     setStatus("error", message);

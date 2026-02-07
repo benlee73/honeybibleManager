@@ -61,18 +61,10 @@
             <button class="primary" type="submit" id="analyzeButton" disabled>
               분석
             </button>
-            <div class="zipline" id="zipline">
-              <div class="zipline-line"></div>
-              <span class="zipline-cat" id="ziplineCat">🐱</span>
+            <div class="progress-bar" id="progressBar" hidden>
+              <div class="progress-fill" id="progressFill"></div>
+              <span class="progress-text" id="progressText">0%</span>
             </div>
-            <a
-              class="download is-disabled"
-              id="downloadButton"
-              href="#"
-              aria-disabled="true"
-            >
-              결과 다운로드
-            </a>
           </div>
 
           <div class="status" id="status" data-state="idle" role="status" aria-live="polite">
@@ -96,7 +88,12 @@
       </section>
 
       <section class="results" id="results" hidden>
-        <h2>분석 결과</h2>
+        <div class="results-header">
+          <h2>분석 결과</h2>
+          <a class="download is-disabled" id="downloadButton" href="#" aria-disabled="true">
+            결과 다운로드
+          </a>
+        </div>
         <div class="stats-row">
           <div class="stat-card">
             <span class="stat-value" id="statMembers">0</span>
