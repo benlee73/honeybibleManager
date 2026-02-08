@@ -307,13 +307,13 @@ class TestAnalyzeChatDual:
         # 2/2~2/20 범위는 19개 날짜로 확장되어 상한(14) 초과 → 스킵
         csv_text = self._make_csv([
             ["날짜", "이름", "메시지"],
-            ["2024-01-01", "user1", "3/15 구약 😀"],
+            ["2024-01-01", "user1", "3/14 구약 😀"],
             ["2024-01-02", "user1", "2/2~2/20 구약 😀"],
         ])
         result = analyze_chat(csv_text, track_mode="dual")
         assert "user1" in result
         # 상한 초과 메시지의 날짜는 포함되지 않아야 함
-        assert result["user1"]["dates_old"] == {"3/15"}
+        assert result["user1"]["dates_old"] == {"3/14"}
 
     def test_analyze_chat_dual__같은_날짜_여러_메시지__1회로_카운팅(self):
         csv_text = self._make_csv([
@@ -766,3 +766,76 @@ class TestAnalyzeChatLeadingTildeCatchup:
         result = analyze_chat(csv_text)
         assert "user1" in result
         assert result["user1"]["dates"] == {"2/1", "2/2", "2/3", "2/4", "2/5"}
+
+
+class TestAnalyzeChatScheduleFilter:
+    def _make_csv(self, rows):
+        output = io.StringIO(newline="")
+        writer = csv.writer(output)
+        for row in rows:
+            writer.writerow(row)
+        return output.getvalue()
+
+    def test_single_성경일독_키워드__일요일_날짜_제외(self):
+        # 2/8 = 일요일 → 진도표에 없으므로 제외
+        csv_text = self._make_csv([
+            ["날짜", "이름", "메시지"],
+            ["2024-01-01", "user1", "창세기 1장 2/7😀"],
+            ["2024-01-02", "user1", "출애굽기 2장 2/8😀"],
+            ["2024-01-03", "user1", "2/9😀"],
+        ])
+        result = analyze_chat(csv_text)
+        assert "user1" in result
+        assert "2/7" in result["user1"]["dates"]
+        assert "2/8" not in result["user1"]["dates"]
+        assert "2/9" in result["user1"]["dates"]
+
+    def test_single_키워드_없음__필터링_없이_전체_통과(self):
+        # 키워드 없으면 schedule=None → 필터 미적용
+        csv_text = self._make_csv([
+            ["날짜", "이름", "메시지"],
+            ["2024-01-01", "user1", "2/8😀"],
+        ])
+        result = analyze_chat(csv_text)
+        assert "user1" in result
+        assert "2/8" in result["user1"]["dates"]
+
+    def test_dual_모드__트랙별_진도표_적용(self):
+        # dual 모드: 구약 → BIBLE_DATES, 신약 → NT_DATES
+        # 5/30: 성경일독O, 신약일독X
+        csv_text = self._make_csv([
+            ["날짜", "이름", "메시지"],
+            ["2024-01-01", "user1", "5/30 구약 😀"],
+            ["2024-01-02", "user1", "5/30 신약 😀"],
+        ])
+        result = analyze_chat(csv_text, track_mode="dual")
+        assert "user1" in result
+        assert "5/30" in result["user1"]["dates_old"]
+        assert "5/30" not in result["user1"]["dates_new"]
+
+    def test_선행_틸드_확장_후_필터_적용(self):
+        # 2/7 토→2/9 월, 2/8=일요일 제외
+        csv_text = self._make_csv([
+            ["날짜", "이름", "메시지"],
+            ["2024-01-01", "user1", "창세기 2/7😀"],
+            ["2024-01-02", "user1", "출애굽기 ~2/9😀"],
+        ])
+        result = analyze_chat(csv_text)
+        assert "user1" in result
+        assert "2/7" in result["user1"]["dates"]
+        assert "2/8" not in result["user1"]["dates"]
+        assert "2/9" in result["user1"]["dates"]
+
+    def test_진도표_외_날짜만_포함된_메시지__해당_메시지_날짜_없음(self):
+        # 일요일 날짜만 있는 메시지 → 필터 후 빈 리스트 → skip
+        csv_text = self._make_csv([
+            ["날짜", "이름", "메시지"],
+            ["2024-01-01", "user1", "창세기 2/2😀"],
+            ["2024-01-02", "user1", "출애굽기 2/3😀"],
+            ["2024-01-03", "user1", "2/8😀"],
+        ])
+        result = analyze_chat(csv_text)
+        assert "user1" in result
+        assert "2/2" in result["user1"]["dates"]
+        assert "2/3" in result["user1"]["dates"]
+        assert "2/8" not in result["user1"]["dates"]

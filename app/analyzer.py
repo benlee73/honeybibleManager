@@ -6,6 +6,7 @@ from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 
 from app.date_parser import DATE_TIME_PATTERN, parse_dates
 from app.emoji import extract_trailing_emoji, normalize_emoji
+from app.schedule import BIBLE_DATES, NT_DATES, detect_schedule
 
 MAX_DATES_PER_MESSAGE = 14
 
@@ -114,6 +115,12 @@ def analyze_chat(csv_text, track_mode="single"):
         emoji_value = emoji_raw.get(user, {}).get(emoji_key, emoji_key)
         user_emojis[user] = {"emoji_key": emoji_key, "emoji": emoji_value}
 
+    if track_mode == "dual":
+        schedule_old = BIBLE_DATES
+        schedule_new = NT_DATES
+    else:
+        schedule = detect_schedule(rows)
+
     users = {}
     user_last_date = {}
     for user, message in rows:
@@ -149,26 +156,35 @@ def analyze_chat(csv_text, track_mode="single"):
             continue
 
         if track_mode == "dual":
+            dates_old = [d for d in dates if d in schedule_old] if "old" in tracks else []
+            dates_new = [d for d in dates if d in schedule_new] if "new" in tracks else []
+            if not dates_old and not dates_new:
+                continue
             entry = users.setdefault(
                 user,
                 {"dates_old": set(), "dates_new": set(), "emoji": assigned["emoji"]},
             )
-            for date_value in dates:
-                if "old" in tracks:
-                    entry["dates_old"].add(date_value)
-                if "new" in tracks:
-                    entry["dates_new"].add(date_value)
-            md = _max_date(dates)
-            if md:
-                if "old" in tracks:
+            for date_value in dates_old:
+                entry["dates_old"].add(date_value)
+            for date_value in dates_new:
+                entry["dates_new"].add(date_value)
+            if dates_old:
+                md = _max_date(dates_old)
+                if md:
                     prev = user_last_date.get((user, "old"))
                     if prev is None or md > prev:
                         user_last_date[(user, "old")] = md
-                if "new" in tracks:
+            if dates_new:
+                md = _max_date(dates_new)
+                if md:
                     prev = user_last_date.get((user, "new"))
                     if prev is None or md > prev:
                         user_last_date[(user, "new")] = md
         else:
+            if schedule is not None:
+                dates = [d for d in dates if d in schedule]
+            if not dates:
+                continue
             entry = users.setdefault(
                 user,
                 {"dates": set(), "emoji": assigned["emoji"]},

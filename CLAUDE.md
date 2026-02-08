@@ -17,6 +17,7 @@ server.py              # 진입점. HTTPServer 실행 (--host, --port)
 app/
   handler.py           # HoneyBibleHandler: HTTP 요청 처리 (GET 정적파일, POST /analyze), extract_multipart_field()
   analyzer.py          # analyze_chat(), build_output_csv(), build_preview_data(), build_output_xlsx(), extract_tracks(): CSV 분석/결과 생성/트랙 감지
+  schedule.py          # BIBLE_DATES, NT_DATES, detect_schedule(): 진도표 날짜 생성 및 키워드 기반 진도표 선택
   date_parser.py       # parse_dates(): 메시지에서 날짜 파싱 (범위~, 쉼표, M/D 형식)
   emoji.py             # extract_trailing_emoji(), normalize_emoji(): 이모티콘 추출/정규화
   logger.py            # setup_logging(), get_logger(): 콘솔+파일(server.log) 로깅 설정
@@ -35,6 +36,9 @@ public/                # 프론트엔드 정적 파일 (index.html, app.js, styl
 ## 분석 규칙 요약
 
 - 한 메시지에서 추출된 날짜가 14개(`MAX_DATES_PER_MESSAGE`)를 초과하면 공지성 메시지로 간주하여 스킵한다.
+- 진도표 기반 날짜 필터링: 일요일 및 파트 간 쉬는 기간의 날짜는 결과에서 제외한다.
+  - Single 모드: CSV 메시지에서 '창세기'+'출애굽기' → 성경일독, '마태복음'+'마가복음' → 신약일독 진도표 적용 (키워드 없으면 필터 미적용)
+  - Dual 모드: 구약 → 성경일독, 신약 → 신약일독 진도표 자동 적용
 
 ## 작업 규칙
 
