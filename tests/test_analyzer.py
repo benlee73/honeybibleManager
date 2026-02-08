@@ -701,3 +701,68 @@ class TestBuildOutputXlsx:
         ws = wb.active
         assert ws.cell(1, 1).value == "이름"
         assert ws.cell(2, 1).value is None
+
+
+class TestAnalyzeChatLeadingTildeCatchup:
+    def _make_csv(self, rows):
+        output = io.StringIO(newline="")
+        writer = csv.writer(output)
+        for row in rows:
+            writer.writerow(row)
+        return output.getvalue()
+
+    def test_single_모드_캐치업__이전_인증_후_선행_틸드(self):
+        csv_text = self._make_csv([
+            ["날짜", "이름", "메시지"],
+            ["2024-01-01", "user1", "2/4😀"],
+            ["2024-01-02", "user1", "~2/7😀"],
+        ])
+        result = analyze_chat(csv_text)
+        assert "user1" in result
+        assert result["user1"]["dates"] == {"2/4", "2/5", "2/6", "2/7"}
+
+    def test_첫_메시지_선행_틸드__last_date_없음__단일_날짜(self):
+        csv_text = self._make_csv([
+            ["날짜", "이름", "메시지"],
+            ["2024-01-01", "user1", "~2/7😀"],
+        ])
+        result = analyze_chat(csv_text)
+        assert "user1" in result
+        assert result["user1"]["dates"] == {"2/7"}
+
+    def test_14일_상한_초과__스킵(self):
+        csv_text = self._make_csv([
+            ["날짜", "이름", "메시지"],
+            ["2024-01-01", "user1", "2/1😀"],
+            ["2024-01-02", "user1", "~2/20😀"],
+        ])
+        result = analyze_chat(csv_text)
+        assert "user1" in result
+        # ~2/20은 2/2~2/20=19일 → 상한 초과 → 스킵
+        assert result["user1"]["dates"] == {"2/1"}
+
+    def test_dual_모드__트랙별_last_date_독립_추적(self):
+        csv_text = self._make_csv([
+            ["날짜", "이름", "메시지"],
+            ["2024-01-01", "user1", "2/2 구약 😀"],
+            ["2024-01-02", "user1", "2/4 신약 😀"],
+            ["2024-01-03", "user1", "~2/5 구약 😀"],
+            ["2024-01-04", "user1", "~2/6 신약 😀"],
+        ])
+        result = analyze_chat(csv_text, track_mode="dual")
+        assert "user1" in result
+        # 구약 last_date=(2,2) → ~2/5 → 2/3,2/4,2/5
+        assert result["user1"]["dates_old"] == {"2/2", "2/3", "2/4", "2/5"}
+        # 신약 last_date=(2,4) → ~2/6 → 2/5,2/6
+        assert result["user1"]["dates_new"] == {"2/4", "2/5", "2/6"}
+
+    def test_연속_캐치업(self):
+        csv_text = self._make_csv([
+            ["날짜", "이름", "메시지"],
+            ["2024-01-01", "user1", "2/1😀"],
+            ["2024-01-02", "user1", "~2/3😀"],
+            ["2024-01-03", "user1", "~2/5😀"],
+        ])
+        result = analyze_chat(csv_text)
+        assert "user1" in result
+        assert result["user1"]["dates"] == {"2/1", "2/2", "2/3", "2/4", "2/5"}

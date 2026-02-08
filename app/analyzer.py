@@ -10,6 +10,19 @@ from app.emoji import extract_trailing_emoji, normalize_emoji
 MAX_DATES_PER_MESSAGE = 14
 
 
+def _max_date(dates):
+    best = None
+    for d in dates:
+        try:
+            month, day = d.split("/")
+            t = (int(month), int(day))
+        except (ValueError, TypeError):
+            continue
+        if best is None or t > best:
+            best = t
+    return best
+
+
 def decode_csv_payload(payload):
     for encoding in ("utf-8-sig", "utf-8", "cp949", "euc-kr"):
         try:
@@ -102,22 +115,40 @@ def analyze_chat(csv_text, track_mode="single"):
         user_emojis[user] = {"emoji_key": emoji_key, "emoji": emoji_value}
 
     users = {}
+    user_last_date = {}
     for user, message in rows:
         assigned = user_emojis.get(user)
         if not assigned:
             continue
         if not message_contains_emoji(message, assigned["emoji_key"], assigned["emoji"]):
             continue
-        dates = parse_dates(message)
+
+        if track_mode == "dual":
+            tracks = extract_tracks(message)
+            if not tracks:
+                continue
+            last_old = user_last_date.get((user, "old"))
+            last_new = user_last_date.get((user, "new"))
+            if tracks == {"old"}:
+                last_date = last_old
+            elif tracks == {"new"}:
+                last_date = last_new
+            else:
+                if last_old is not None and last_new is not None:
+                    last_date = min(last_old, last_new)
+                else:
+                    last_date = last_old or last_new
+            dates = parse_dates(message, last_date=last_date)
+        else:
+            last_date = user_last_date.get(user)
+            dates = parse_dates(message, last_date=last_date)
+
         if not dates:
             continue
         if len(dates) > MAX_DATES_PER_MESSAGE:
             continue
 
         if track_mode == "dual":
-            tracks = extract_tracks(message)
-            if not tracks:
-                continue
             entry = users.setdefault(
                 user,
                 {"dates_old": set(), "dates_new": set(), "emoji": assigned["emoji"]},
@@ -127,6 +158,16 @@ def analyze_chat(csv_text, track_mode="single"):
                     entry["dates_old"].add(date_value)
                 if "new" in tracks:
                     entry["dates_new"].add(date_value)
+            md = _max_date(dates)
+            if md:
+                if "old" in tracks:
+                    prev = user_last_date.get((user, "old"))
+                    if prev is None or md > prev:
+                        user_last_date[(user, "old")] = md
+                if "new" in tracks:
+                    prev = user_last_date.get((user, "new"))
+                    if prev is None or md > prev:
+                        user_last_date[(user, "new")] = md
         else:
             entry = users.setdefault(
                 user,
@@ -134,6 +175,11 @@ def analyze_chat(csv_text, track_mode="single"):
             )
             for date_value in dates:
                 entry["dates"].add(date_value)
+            md = _max_date(dates)
+            if md:
+                prev = user_last_date.get(user)
+                if prev is None or md > prev:
+                    user_last_date[user] = md
 
     return users
 

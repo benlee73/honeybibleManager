@@ -136,3 +136,45 @@ class TestParseDates:
     def test_parse_dates__text_with_embedded_date__extracts_date(self):
         result = parse_dates("오늘은 3/15 입니다")
         assert "3/15" in result
+
+
+class TestParseDatesLeadingTilde:
+    def test_선행_틸드__기본_확장(self):
+        result = parse_dates("~2/7", last_date=(2, 4))
+        assert result == ["2/5", "2/6", "2/7"]
+
+    def test_선행_틸드__last_date_없으면_기존_동작(self):
+        result = parse_dates("~2/7")
+        assert result == ["2/7"]
+
+    def test_선행_틸드__콤마_조합(self):
+        result = parse_dates("~2/7,2/10", last_date=(2, 4))
+        assert result == ["2/5", "2/6", "2/7", "2/10"]
+
+    def test_선행_틸드__월_경계(self):
+        result = parse_dates("~2/2", last_date=(1, 30))
+        assert result == ["1/31", "2/1", "2/2"]
+
+    def test_선행_틸드__같은_날짜__빈_결과(self):
+        result = parse_dates("~2/4", last_date=(2, 4))
+        assert result == []
+
+    def test_선행_틸드__역순__빈_결과(self):
+        result = parse_dates("~2/3", last_date=(2, 5))
+        assert result == []
+
+    def test_선행_틸드__1일_차이(self):
+        result = parse_dates("~2/5", last_date=(2, 4))
+        assert result == ["2/5"]
+
+    def test_선행_틸드__공백_포함(self):
+        result = parse_dates("~ 2/7", last_date=(2, 4))
+        assert result == ["2/5", "2/6", "2/7"]
+
+    def test_틸드_없는_메시지에_last_date_전달__무시(self):
+        result = parse_dates("2/7", last_date=(2, 4))
+        assert result == ["2/7"]
+
+    def test_중간_틸드__last_date_전달__기존_범위_확장_유지(self):
+        result = parse_dates("2/4~2/7", last_date=(2, 1))
+        assert result == ["2/4", "2/5", "2/6", "2/7"]

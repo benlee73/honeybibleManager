@@ -79,12 +79,45 @@ def expand_range(start_month, start_day, end_month, end_day):
     return results
 
 
-def parse_dates(message):
+def parse_dates(message, last_date=None):
     if not message:
         return []
     cleaned = re.sub(r"\s+", "", message)
     results = []
     index = 0
+
+    if cleaned.startswith("~") and last_date is not None:
+        index = 1
+        match = DATE_TOKEN_PATTERN.search(cleaned, index)
+        if match and match.start() == index:
+            month = int(match.group(1))
+            day = int(match.group(2))
+            if is_valid_date(month, day):
+                results.extend(
+                    expand_range(last_date[0], last_date[1], month, day)
+                )
+                current_month = month
+                current_day = day
+                index = match.end()
+
+                while index < len(cleaned) and cleaned[index] in ("~", ","):
+                    separator = cleaned[index]
+                    index += 1
+                    parsed = parse_date_or_day(cleaned, index, current_month)
+                    if not parsed:
+                        break
+                    next_month, next_day, index = parsed
+                    if separator == "~":
+                        results.extend(
+                            expand_range(current_month, current_day, next_month, next_day)
+                        )
+                    else:
+                        results.append(f"{next_month}/{next_day}")
+                    current_month = next_month
+                    current_day = next_day
+
+                return results
+        index = 0
 
     while index < len(cleaned):
         match = DATE_TOKEN_PATTERN.search(cleaned, index)
