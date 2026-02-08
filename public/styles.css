@@ -130,6 +130,28 @@ body {
   border-color: rgba(122, 61, 18, 0.45);
 }
 
+.theme-button {
+  border: 1px solid var(--line);
+  background: var(--cheer-bg);
+  color: var(--ink-1);
+  border-radius: 999px;
+  padding: 8px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+}
+
+.theme-button:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 12px 20px rgba(117, 60, 11, 0.2);
+  border-color: rgba(122, 61, 18, 0.45);
+}
+
 .cheer-heart {
   position: absolute;
   width: 12px;
@@ -647,6 +669,108 @@ code {
 .preview-table .mark {
   color: var(--honey-2);
   font-weight: 700;
+}
+
+/* B&W 테마 */
+body[data-theme="bw"] {
+  --honey-1: #999;
+  --honey-2: #666;
+  --honey-3: #333;
+  --honey-4: #222;
+  --ink-1: #111;
+  --ink-2: #555;
+  --cream-1: #f5f5f5;
+  --cream-2: #eee;
+  --cream-3: #e5e5e5;
+  --accent: #333;
+  --accent-soft: rgba(50, 50, 50, 0.2);
+  --surface: #fff;
+  --surface-strong: #f8f8f8;
+  --line: rgba(0, 0, 0, 0.15);
+  --panel-border: rgba(0, 0, 0, 0.12);
+  --shadow: rgba(0, 0, 0, 0.1);
+  --shadow-strong: rgba(0, 0, 0, 0.18);
+  --bg-gradient: #e8e8e8;
+  --bg-overlay: transparent;
+  --glow-one: #ddd;
+  --glow-two: #ccc;
+  --grid-line-1: #fff;
+  --grid-line-2: #fff;
+  --input-bg: #f5f5f5;
+  --chip-bg: #eee;
+  --download-bg: #f0f0f0;
+  --status-bg: #f2f2f2;
+  --cheer-bg: #f5f5f5;
+  --heart-color: #888;
+  --heart-glow: rgba(136, 136, 136, 0.4);
+}
+
+/* Brew 테마 (brew.sh 스타일 — 다크 브라운 + 골드/앰버) */
+body[data-theme="brew"] {
+  --honey-1: #be862d;
+  --honey-2: #d3a459;
+  --honey-3: #8b5e2a;
+  --honey-4: #745626;
+  --ink-1: #f9d094;
+  --ink-2: #d3a459;
+  --cream-1: #3a3228;
+  --cream-2: #332c22;
+  --cream-3: #2e2a24;
+  --accent: #be862d;
+  --accent-soft: rgba(162, 107, 20, 0.3);
+  --surface: #352f27;
+  --surface-strong: #3a3228;
+  --line: rgba(190, 134, 45, 0.25);
+  --panel-border: rgba(190, 134, 45, 0.3);
+  --shadow: rgba(0, 0, 0, 0.3);
+  --shadow-strong: rgba(0, 0, 0, 0.5);
+  --bg-gradient: #2e2a24;
+  --bg-overlay: transparent;
+  --glow-one: rgba(190, 134, 45, 0.06);
+  --glow-two: rgba(249, 208, 148, 0.06);
+  --grid-line-1: #2e2a24;
+  --grid-line-2: #2e2a24;
+  --input-bg: #3a3228;
+  --chip-bg: #3a3228;
+  --download-bg: #3a3228;
+  --status-bg: #3a3228;
+  --cheer-bg: #3a3228;
+  --heart-color: #f9d094;
+  --heart-glow: rgba(249, 208, 148, 0.4);
+}
+
+/* 네온 테마 */
+body[data-theme="neon"] {
+  --honey-1: #39ff14;
+  --honey-2: #00e5ff;
+  --honey-3: #ff00e5;
+  --honey-4: #b300a0;
+  --ink-1: #eee;
+  --ink-2: #aaa;
+  --cream-1: #1a1a2e;
+  --cream-2: #16162a;
+  --cream-3: #121226;
+  --accent: #39ff14;
+  --accent-soft: rgba(57, 255, 20, 0.2);
+  --surface: #0f0f1a;
+  --surface-strong: #1a1a2e;
+  --line: rgba(57, 255, 20, 0.2);
+  --panel-border: rgba(57, 255, 20, 0.25);
+  --shadow: rgba(57, 255, 20, 0.1);
+  --shadow-strong: rgba(57, 255, 20, 0.2);
+  --bg-gradient: #0a0a14;
+  --bg-overlay: transparent;
+  --glow-one: rgba(57, 255, 20, 0.08);
+  --glow-two: rgba(0, 229, 255, 0.08);
+  --grid-line-1: #0f0f1a;
+  --grid-line-2: #0f0f1a;
+  --input-bg: #1a1a2e;
+  --chip-bg: #1a1a2e;
+  --download-bg: #1a1a2e;
+  --status-bg: #1a1a2e;
+  --cheer-bg: #1a1a2e;
+  --heart-color: #ff00e5;
+  --heart-glow: rgba(255, 0, 229, 0.45);
 }
 
 @media (max-width: 720px) {

@@ -1,5 +1,42 @@
 const API_ENDPOINT = "/analyze";
 
+/* 테마 순환 */
+const THEMES = [
+  { id: "honey", label: "🍯 기본" },
+  { id: "bw", label: "🖤 B&W" },
+  { id: "brew", label: "🍺 Brew" },
+  { id: "neon", label: "⚡ 네온" },
+];
+
+const themeButton = document.getElementById("themeButton");
+
+const applyTheme = (themeId) => {
+  const theme = THEMES.find((t) => t.id === themeId) || THEMES[0];
+  if (theme.id === "honey") {
+    delete document.body.dataset.theme;
+  } else {
+    document.body.dataset.theme = theme.id;
+  }
+  if (themeButton) {
+    themeButton.textContent = theme.label;
+  }
+  localStorage.setItem("theme", theme.id);
+};
+
+(() => {
+  const saved = localStorage.getItem("theme");
+  applyTheme(saved || "honey");
+})();
+
+if (themeButton) {
+  themeButton.addEventListener("click", () => {
+    const current = localStorage.getItem("theme") || "honey";
+    const idx = THEMES.findIndex((t) => t.id === current);
+    const next = THEMES[(idx + 1) % THEMES.length];
+    applyTheme(next.id);
+  });
+}
+
 const cheerButton = document.getElementById("cheerButton");
 
 const spawnHearts = (originX, originY) => {
