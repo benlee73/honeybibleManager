@@ -15,20 +15,23 @@ _NT_RANGES = [
 ]
 
 
-def _generate_dates(ranges):
-    """범위 내 일요일 제외 날짜를 "M/D" 문자열 frozenset으로 반환"""
+def _generate_dates(ranges, exclude_weekdays=(6,)):
+    """범위 내 제외 요일을 뺀 날짜를 "M/D" 문자열 frozenset으로 반환.
+
+    exclude_weekdays: 제외할 요일 튜플 (0=월, 5=토, 6=일)
+    """
     dates = set()
     for start, end in ranges:
         current = start
         while current <= end:
-            if current.weekday() != 6:  # 6 = 일요일
+            if current.weekday() not in exclude_weekdays:
                 dates.add(f"{current.month}/{current.day}")
             current += datetime.timedelta(days=1)
     return frozenset(dates)
 
 
-BIBLE_DATES = _generate_dates(_BIBLE_RANGES)
-NT_DATES = _generate_dates(_NT_RANGES)
+BIBLE_DATES = _generate_dates(_BIBLE_RANGES, exclude_weekdays=(6,))
+NT_DATES = _generate_dates(_NT_RANGES, exclude_weekdays=(5, 6))
 
 
 def detect_schedule(rows):

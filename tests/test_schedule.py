@@ -18,10 +18,13 @@ class TestGenerateDates:
         assert "2/8" not in BIBLE_DATES
         assert "2/8" not in NT_DATES
 
-    def test_일요일_제외__토요일_포함(self):
-        # 2026-02-07 = 토요일
+    def test_성경일독__토요일_포함(self):
+        # 2026-02-07 = 토요일, 성경일독은 월~토
         assert "2/7" in BIBLE_DATES
-        assert "2/7" in NT_DATES
+
+    def test_신약일독__토요일_미포함(self):
+        # 2026-02-07 = 토요일, 신약일독은 월~금
+        assert "2/7" not in NT_DATES
 
     def test_일요일_제외__월요일_포함(self):
         # 2026-02-09 = 월요일
@@ -76,7 +79,8 @@ class TestScheduleContents:
         assert len(BIBLE_DATES) > 200
 
     def test_신약일독_날짜_수(self):
-        assert len(NT_DATES) > 200
+        # 신약일독은 월~금(5일)이므로 성경일독(월~토 6일)보다 적음
+        assert len(NT_DATES) > 150
 
     def test_성경일독_신약일독_크기_차이(self):
         # 성경일독이 약간 더 김 (종료일 차이)
