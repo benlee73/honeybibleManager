@@ -160,14 +160,29 @@ const computeStats = (headers, rows, trackMode) => {
   const avgRate = totalCells > 0 ? Math.round((totalO / totalCells) * 100) : 0;
 
   let perfectCount = 0;
-  const nameTotalCells = {};
-  rows.forEach((row) => {
-    const name = row[0];
-    nameTotalCells[name] = (nameTotalCells[name] || 0) + dateCount;
-  });
-  for (const [name, total] of Object.entries(nameTotalCells)) {
-    if (total > 0 && nameCounts[name] === total) {
-      perfectCount += 1;
+  if (trackMode === "dual") {
+    const oldNameCounts = {};
+    rows.forEach((row) => {
+      if (row[2] !== "구약") return;
+      let rowO = 0;
+      for (let i = dateStart; i < row.length; i += 1) {
+        if (row[i] === "O") rowO += 1;
+      }
+      oldNameCounts[row[0]] = (oldNameCounts[row[0]] || 0) + rowO;
+    });
+    for (const [name, count] of Object.entries(oldNameCounts)) {
+      if (dateCount > 0 && count === dateCount) perfectCount += 1;
+    }
+  } else {
+    const nameTotalCells = {};
+    rows.forEach((row) => {
+      const name = row[0];
+      nameTotalCells[name] = (nameTotalCells[name] || 0) + dateCount;
+    });
+    for (const [name, total] of Object.entries(nameTotalCells)) {
+      if (total > 0 && nameCounts[name] === total) {
+        perfectCount += 1;
+      }
     }
   }
 
