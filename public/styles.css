@@ -670,6 +670,14 @@ code {
   color: var(--ink-1);
 }
 
+.preview-table tbody tr {
+  transition: background 0.15s ease;
+}
+
+.preview-table tbody tr:hover {
+  background: var(--accent-soft);
+}
+
 .preview-table .mark {
   color: var(--honey-2);
   font-weight: 700;
