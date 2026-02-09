@@ -138,14 +138,59 @@ class HoneyBibleHandler(BaseHTTPRequestHandler):
         self._send_cors()
         self.end_headers()
 
-    def do_GET(self):
-        logger.info("요청 수신: GET %s", self.path)
-        if self.path.startswith("/analyze"):
+    def _handle_get(self, send_body=True):
+        logger.info("요청 수신: %s %s", self.command, self.path)
+        clean = self.path.split("?", 1)[0].split("#", 1)[0]
+
+        if clean == "/health":
+            body = b'{"status":"ok"}'
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            if send_body:
+                self.wfile.write(body)
+            return
+
+        if clean.startswith("/analyze"):
             self._send_json(405, {"message": "Method not allowed"})
             return
 
         file_path = self._resolve_public_path(self.path)
-        self._send_file(file_path)
+        if send_body:
+            self._send_file(file_path)
+        else:
+            self._send_file_head(file_path)
+
+    def _send_file_head(self, file_path):
+        if not file_path or not os.path.isfile(file_path):
+            self.send_response(404)
+            self.send_header("Content-Type", "text/plain; charset=utf-8")
+            self.end_headers()
+            return
+
+        content_type, _ = mimetypes.guess_type(file_path)
+        if not content_type:
+            content_type = "application/octet-stream"
+
+        try:
+            size = os.path.getsize(file_path)
+        except OSError:
+            self.send_response(500)
+            self.send_header("Content-Type", "text/plain; charset=utf-8")
+            self.end_headers()
+            return
+
+        self.send_response(200)
+        self.send_header("Content-Type", f"{content_type}; charset=utf-8")
+        self.send_header("Content-Length", str(size))
+        self.end_headers()
+
+    def do_GET(self):
+        self._handle_get(send_body=True)
+
+    def do_HEAD(self):
+        self._handle_get(send_body=False)
 
     def do_POST(self):
         logger.info("요청 수신: POST %s", self.path)

@@ -1,9 +1,13 @@
+import io
 import os
+import threading
+from http.server import HTTPServer
 from unittest.mock import patch
+from urllib.request import Request, urlopen
 
 import pytest
 
-from app.handler import PUBLIC_DIR, extract_multipart_field, extract_multipart_file
+from app.handler import HoneyBibleHandler, PUBLIC_DIR, extract_multipart_field, extract_multipart_file
 
 
 def _make_multipart_payload(field_name, filename, content, boundary="testboundary"):
@@ -114,3 +118,37 @@ class TestExtractMultipartField:
         )
         result = extract_multipart_field(payload, content_type, "track_mode")
         assert result == "single"
+
+
+@pytest.fixture()
+def test_server():
+    server = HTTPServer(("127.0.0.1", 0), HoneyBibleHandler)
+    port = server.server_address[1]
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    yield f"http://127.0.0.1:{port}"
+    server.shutdown()
+
+
+class TestHeadRequest:
+    def test_head_루트__200_응답_바디_없음(self, test_server):
+        req = Request(f"{test_server}/", method="HEAD")
+        resp = urlopen(req)
+        assert resp.status == 200
+        assert resp.read() == b""
+
+    def test_head_health__200_json_응답(self, test_server):
+        req = Request(f"{test_server}/health", method="HEAD")
+        resp = urlopen(req)
+        assert resp.status == 200
+        assert resp.headers["Content-Type"] == "application/json; charset=utf-8"
+        assert resp.read() == b""
+
+
+class TestHealthEndpoint:
+    def test_get_health__200_ok_응답(self, test_server):
+        resp = urlopen(f"{test_server}/health")
+        assert resp.status == 200
+        body = resp.read()
+        assert b'"status"' in body
+        assert b'"ok"' in body
