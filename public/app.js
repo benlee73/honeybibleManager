@@ -4,7 +4,7 @@ const API_ENDPOINT = "/analyze";
 const THEMES = [
   { id: "honey", label: "🍯 기본" },
   { id: "bw", label: "🖤 B&W" },
-  { id: "brew", label: "🍺 Brew" },
+  { id: "brew", label: "☕ Brew" },
   { id: "neon", label: "⚡ 네온" },
 ];
 
