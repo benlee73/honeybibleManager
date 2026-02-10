@@ -609,6 +609,8 @@ code {
 
 .results {
   grid-column: 1 / -1;
+  min-width: 0;
+  overflow: hidden;
   animation: rise 0.8s ease-out both;
   animation-delay: 0.15s;
 }
@@ -935,6 +937,21 @@ body[data-theme="neon"] .file-input:focus-within {
 
   .progress-bar {
     width: 100%;
+  }
+
+  .results-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .download-group {
+    width: 100%;
+    flex-direction: column;
+  }
+
+  .download-group .download {
+    width: 100%;
+    text-align: center;
   }
 
   .stats-row {
