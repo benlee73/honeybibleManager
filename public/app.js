@@ -91,6 +91,7 @@ const previewTable = document.getElementById("previewTable");
 const progressBar = document.getElementById("progressBar");
 const progressFill = document.getElementById("progressFill");
 const progressText = document.getElementById("progressText");
+const imageToggle = document.getElementById("imageToggle");
 const imageView = document.getElementById("imageView");
 const resultImage = document.getElementById("resultImage");
 const driveButton = document.getElementById("driveButton");
@@ -121,6 +122,13 @@ const resetDownload = () => {
   currentImageBase64 = null;
   if (resultImage) {
     resultImage.removeAttribute("src");
+  }
+  if (imageToggle) {
+    imageToggle.hidden = true;
+    imageToggle.classList.remove("is-open");
+  }
+  if (imageView) {
+    imageView.hidden = true;
   }
   currentXlsxBase64 = null;
   currentDriveFilename = null;
@@ -439,6 +447,9 @@ form.addEventListener("submit", async (event) => {
     if (data.image_base64 && resultImage) {
       currentImageBase64 = data.image_base64;
       resultImage.src = `data:image/png;base64,${currentImageBase64}`;
+      if (imageToggle) {
+        imageToggle.hidden = false;
+      }
     }
 
     if (data.xlsx_base64 && driveButton) {
@@ -456,6 +467,18 @@ form.addEventListener("submit", async (event) => {
     analyzeButton.disabled = !canAnalyze;
   }
 });
+
+if (imageToggle) {
+  imageToggle.addEventListener("click", () => {
+    if (!imageView) return;
+    const opening = imageView.hidden;
+    imageView.hidden = !opening;
+    imageToggle.classList.toggle("is-open", opening);
+    if (opening) {
+      imageView.scrollIntoView({ behavior: "smooth" });
+    }
+  });
+}
 
 if (driveButton) {
   driveButton.addEventListener("click", async () => {
