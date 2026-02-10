@@ -16,6 +16,7 @@ from app.analyzer import (
     decode_payload,
     parse_csv_rows,
 )
+from app.image_builder import build_output_image
 from app.logger import get_logger
 from app.txt_parser import parse_txt
 
@@ -288,11 +289,13 @@ class HoneyBibleHandler(BaseHTTPRequestHandler):
 
         users = analyze_chat(rows=rows, track_mode=track_mode)
         xlsx_bytes = build_output_xlsx(users, track_mode=track_mode)
+        image_bytes = build_output_image(users, track_mode=track_mode)
         headers, rows = build_preview_data(users, track_mode=track_mode)
         logger.info("분석 완료: %d명 처리", len(users))
 
         self._send_json(200, {
             "xlsx_base64": base64.b64encode(xlsx_bytes).decode("ascii"),
+            "image_base64": base64.b64encode(image_bytes).decode("ascii"),
             "filename": "honeybible-results.xlsx",
             "preview": {"headers": headers, "rows": rows},
         })

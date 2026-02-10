@@ -5,6 +5,7 @@ import pytest
 
 from app.analyzer import (
     analyze_chat,
+    build_dual_preview_data,
     build_output_csv,
     build_output_xlsx,
     build_preview_data,
@@ -902,3 +903,58 @@ class TestAnalyzeChatWithRows:
         rows = [("user1", "3/15😀")]
         result = analyze_chat(csv_text="invalid", rows=rows)
         assert "user1" in result
+
+
+class TestBuildDualPreviewData:
+    def test_구약_신약_분리된_헤더와_행(self):
+        users = {
+            "user1": {"dates_old": {"2/2", "2/4"}, "dates_new": {"2/3"}, "emoji": "😀"},
+        }
+        old_h, old_r, new_h, new_r = build_dual_preview_data(users)
+        assert old_h[:2] == ["이름", "이모티콘"]
+        assert "2/2" in old_h
+        assert "2/4" in old_h
+        assert len(old_r) == 1
+        assert old_r[0][0] == "user1"
+
+        assert new_h[:2] == ["이름", "이모티콘"]
+        assert "2/3" in new_h
+        assert len(new_r) == 1
+
+    def test_한쪽_트랙만_있는_사용자(self):
+        users = {
+            "user1": {"dates_old": {"2/2"}, "dates_new": set(), "emoji": "😀"},
+            "user2": {"dates_old": set(), "dates_new": {"2/3"}, "emoji": "🔥"},
+        }
+        old_h, old_r, new_h, new_r = build_dual_preview_data(users)
+        assert len(old_r) == 1
+        assert old_r[0][0] == "user1"
+        assert len(new_r) == 1
+        assert new_r[0][0] == "user2"
+
+    def test_빈_사용자(self):
+        old_h, old_r, new_h, new_r = build_dual_preview_data({})
+        assert old_h == ["이름", "이모티콘"]
+        assert old_r == []
+        assert new_h == ["이름", "이모티콘"]
+        assert new_r == []
+
+    def test_xlsx와_동일_데이터(self):
+        from openpyxl import load_workbook
+
+        users = {
+            "user1": {"dates_old": {"2/2"}, "dates_new": {"2/3"}, "emoji": "😀"},
+        }
+        old_h, old_r, new_h, new_r = build_dual_preview_data(users)
+        result = build_output_xlsx(users, track_mode="dual")
+        wb = load_workbook(io.BytesIO(result))
+        ws_old = wb["구약 진도표"]
+        ws_new = wb["신약 진도표"]
+
+        # 구약 헤더 일치
+        xlsx_old_h = [ws_old.cell(1, c).value for c in range(1, ws_old.max_column + 1)]
+        assert old_h == xlsx_old_h
+
+        # 신약 헤더 일치
+        xlsx_new_h = [ws_new.cell(1, c).value for c in range(1, ws_new.max_column + 1)]
+        assert new_h == xlsx_new_h

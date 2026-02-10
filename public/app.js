@@ -91,8 +91,12 @@ const previewTable = document.getElementById("previewTable");
 const progressBar = document.getElementById("progressBar");
 const progressFill = document.getElementById("progressFill");
 const progressText = document.getElementById("progressText");
+const imageViewButton = document.getElementById("imageViewButton");
+const imageView = document.getElementById("imageView");
+const resultImage = document.getElementById("resultImage");
 
 let currentObjectUrl = null;
+let currentImageBase64 = null;
 
 const setStatus = (state, message) => {
   status.dataset.state = state;
@@ -112,6 +116,15 @@ const resetDownload = () => {
   downloadButton.setAttribute("aria-disabled", "true");
   downloadButton.removeAttribute("href");
   downloadButton.removeAttribute("download");
+  if (imageViewButton) {
+    imageViewButton.classList.add("is-disabled");
+    imageViewButton.disabled = true;
+    imageViewButton.innerHTML = '이미지로 보기 <span class="file-format">(PNG)</span>';
+  }
+  if (imageView) {
+    imageView.hidden = true;
+  }
+  currentImageBase64 = null;
   if (progressBar) {
     progressBar.hidden = true;
     progressFill.style.width = "0%";
@@ -417,6 +430,12 @@ form.addEventListener("submit", async (event) => {
     downloadButton.download = filename;
     downloadButton.classList.remove("is-disabled");
     downloadButton.setAttribute("aria-disabled", "false");
+
+    if (data.image_base64 && imageViewButton) {
+      currentImageBase64 = data.image_base64;
+      imageViewButton.classList.remove("is-disabled");
+      imageViewButton.disabled = false;
+    }
   } catch (error) {
     const message = error instanceof Error ? error.message : "분석에 실패했습니다.";
     setStatus("error", message);
@@ -426,6 +445,21 @@ form.addEventListener("submit", async (event) => {
     analyzeButton.disabled = !canAnalyze;
   }
 });
+
+if (imageViewButton) {
+  imageViewButton.addEventListener("click", () => {
+    if (!currentImageBase64 || !imageView || !resultImage) return;
+    if (imageView.hidden) {
+      resultImage.src = `data:image/png;base64,${currentImageBase64}`;
+      imageView.hidden = false;
+      imageViewButton.innerHTML = '이미지 닫기 <span class="file-format">(PNG)</span>';
+      imageView.scrollIntoView({ behavior: "smooth" });
+    } else {
+      imageView.hidden = true;
+      imageViewButton.innerHTML = '이미지로 보기 <span class="file-format">(PNG)</span>';
+    }
+  });
+}
 
 window.addEventListener("beforeunload", () => {
   clearObjectUrl();

@@ -107,9 +107,14 @@
       <section class="results" id="results" hidden>
         <div class="results-header">
           <h2>분석 결과</h2>
-          <a class="download is-disabled" id="downloadButton" href="#" aria-disabled="true">
-            결과 다운로드
-          </a>
+          <div class="download-group">
+            <a class="download is-disabled" id="downloadButton" href="#" aria-disabled="true">
+              결과 다운로드 <span class="file-format">(엑셀 파일)</span>
+            </a>
+            <button class="download is-disabled" id="imageViewButton" type="button" disabled>
+              이미지로 보기 <span class="file-format">(PNG)</span>
+            </button>
+          </div>
         </div>
         <div class="stats-row">
           <div class="stat-card">
@@ -131,6 +136,10 @@
         </div>
         <div class="table-wrap">
           <table class="preview-table" id="previewTable"></table>
+        </div>
+        <div class="image-view" id="imageView" hidden>
+          <p class="image-hint">이미지를 길게 눌러 저장할 수 있습니다.</p>
+          <img id="resultImage" alt="꿀성경 진도표 결과" />
         </div>
       </section>
     </main>

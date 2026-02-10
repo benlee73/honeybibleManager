@@ -31,6 +31,8 @@
   --cheer-bg: #fff8e6;
   --heart-color: #f07b77;
   --heart-glow: rgba(240, 123, 119, 0.45);
+  --btn-shadow: rgba(117, 60, 11, 0.28);
+  --btn-shadow-hover: rgba(117, 60, 11, 0.32);
   --font-display: "Jua", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
   --font-body: "Gamja Flower", "Apple SD Gothic Neo", "Malgun Gothic", cursive;
 }
@@ -364,7 +366,7 @@ button,
 .primary {
   background: var(--honey-3);
   color: #fffaf2;
-  box-shadow: 0 14px 26px rgba(117, 60, 11, 0.28);
+  box-shadow: 0 14px 26px var(--btn-shadow);
 }
 
 .primary:disabled {
@@ -375,7 +377,7 @@ button,
 
 .primary:not(:disabled):hover {
   transform: translateY(-1px);
-  box-shadow: 0 18px 30px rgba(117, 60, 11, 0.32);
+  box-shadow: 0 18px 30px var(--btn-shadow-hover);
 }
 
 .download {
@@ -384,12 +386,12 @@ button,
   border: none;
   padding: 14px 44px;
   font-size: 16px;
-  box-shadow: 0 14px 26px rgba(117, 60, 11, 0.28);
+  box-shadow: 0 14px 26px var(--btn-shadow);
 }
 
 .download:hover {
   transform: translateY(-1px);
-  box-shadow: 0 18px 30px rgba(117, 60, 11, 0.32);
+  box-shadow: 0 18px 30px var(--btn-shadow-hover);
 }
 
 .download.is-disabled {
@@ -625,6 +627,36 @@ code {
   margin: 0;
 }
 
+.download-group {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.file-format {
+  font-size: 0.75em;
+  opacity: 0.8;
+}
+
+.image-view {
+  margin-top: 20px;
+  text-align: center;
+}
+
+.image-view img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 12px;
+  box-shadow: 0 12px 28px var(--shadow);
+  border: 1px solid var(--panel-border);
+}
+
+.image-hint {
+  font-size: 13px;
+  color: var(--ink-2);
+  margin: 0 0 10px;
+}
+
 .stats-row {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
@@ -744,6 +776,8 @@ body[data-theme="bw"] {
   --cheer-bg: #1a1a1a;
   --heart-color: #888;
   --heart-glow: rgba(136, 136, 136, 0.4);
+  --btn-shadow: rgba(255, 255, 255, 0.1);
+  --btn-shadow-hover: rgba(255, 255, 255, 0.15);
 }
 
 body[data-theme="bw"] .cheer-button:hover,
@@ -762,13 +796,6 @@ body[data-theme="bw"] .file-input:focus-within {
   box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.15);
 }
 
-body[data-theme="bw"] .primary:not(:disabled):hover {
-  box-shadow: 0 18px 30px rgba(255, 255, 255, 0.15);
-}
-
-body[data-theme="bw"] .download:hover {
-  box-shadow: 0 18px 30px rgba(255, 255, 255, 0.15);
-}
 
 /* Brew 테마 (brew.sh 스타일 — 다크 브라운 + 골드/앰버) */
 body[data-theme="brew"] {
@@ -802,6 +829,8 @@ body[data-theme="brew"] {
   --cheer-bg: #3a3228;
   --heart-color: #f9d094;
   --heart-glow: rgba(249, 208, 148, 0.4);
+  --btn-shadow: rgba(190, 134, 45, 0.2);
+  --btn-shadow-hover: rgba(190, 134, 45, 0.3);
 }
 
 body[data-theme="brew"] .cheer-button:hover,
@@ -820,13 +849,6 @@ body[data-theme="brew"] .file-input:focus-within {
   box-shadow: 0 0 0 3px rgba(190, 134, 45, 0.2);
 }
 
-body[data-theme="brew"] .primary:not(:disabled):hover {
-  box-shadow: 0 18px 30px rgba(190, 134, 45, 0.3);
-}
-
-body[data-theme="brew"] .download:hover {
-  box-shadow: 0 18px 30px rgba(190, 134, 45, 0.3);
-}
 
 /* 네온 테마 */
 body[data-theme="neon"] {
@@ -860,6 +882,8 @@ body[data-theme="neon"] {
   --cheer-bg: #1a1a2e;
   --heart-color: #ff00e5;
   --heart-glow: rgba(255, 0, 229, 0.45);
+  --btn-shadow: rgba(255, 0, 229, 0.18);
+  --btn-shadow-hover: rgba(255, 0, 229, 0.25);
 }
 
 body[data-theme="neon"] .cheer-button:hover,
@@ -878,13 +902,6 @@ body[data-theme="neon"] .file-input:focus-within {
   box-shadow: 0 0 0 3px rgba(0, 229, 255, 0.2);
 }
 
-body[data-theme="neon"] .primary:not(:disabled):hover {
-  box-shadow: 0 18px 30px rgba(255, 0, 229, 0.25);
-}
-
-body[data-theme="neon"] .download:hover {
-  box-shadow: 0 18px 30px rgba(255, 0, 229, 0.25);
-}
 
 @media (max-width: 720px) {
   .frame {

@@ -364,44 +364,53 @@ def _apply_sheet_style(ws, headers, rows):
     ws.freeze_panes = "A2"
 
 
+def build_dual_preview_data(users):
+    """Dual 모드에서 구약/신약 별도의 headers+rows를 반환한다."""
+    all_users = sorted(
+        u for u, e in users.items()
+        if e.get("dates_old") or e.get("dates_new")
+    )
+
+    old_dates = set()
+    new_dates = set()
+    for entry in users.values():
+        old_dates.update(entry.get("dates_old", set()))
+        new_dates.update(entry.get("dates_new", set()))
+    old_dates_sorted = sort_dates(old_dates)
+    new_dates_sorted = sort_dates(new_dates)
+
+    old_headers = ["이름", "이모티콘"] + old_dates_sorted
+    old_rows = []
+    for user in all_users:
+        entry = users[user]
+        if entry.get("dates_old"):
+            row = [user, entry.get("emoji", "")]
+            row.extend("O" if d in entry["dates_old"] else "" for d in old_dates_sorted)
+            old_rows.append(row)
+
+    new_headers = ["이름", "이모티콘"] + new_dates_sorted
+    new_rows = []
+    for user in all_users:
+        entry = users[user]
+        if entry.get("dates_new"):
+            row = [user, entry.get("emoji", "")]
+            row.extend("O" if d in entry["dates_new"] else "" for d in new_dates_sorted)
+            new_rows.append(row)
+
+    return old_headers, old_rows, new_headers, new_rows
+
+
 def build_output_xlsx(users, track_mode="single"):
     wb = Workbook()
 
     if track_mode == "dual":
-        all_users = sorted(
-            u for u, e in users.items()
-            if e.get("dates_old") or e.get("dates_new")
-        )
-
-        old_dates = set()
-        new_dates = set()
-        for entry in users.values():
-            old_dates.update(entry.get("dates_old", set()))
-            new_dates.update(entry.get("dates_new", set()))
-        old_dates_sorted = sort_dates(old_dates)
-        new_dates_sorted = sort_dates(new_dates)
+        old_headers, old_rows, new_headers, new_rows = build_dual_preview_data(users)
 
         ws_old = wb.active
         ws_old.title = "구약 진도표"
-        old_headers = ["이름", "이모티콘"] + old_dates_sorted
-        old_rows = []
-        for user in all_users:
-            entry = users[user]
-            if entry.get("dates_old"):
-                row = [user, entry.get("emoji", "")]
-                row.extend("O" if d in entry["dates_old"] else "" for d in old_dates_sorted)
-                old_rows.append(row)
         _apply_sheet_style(ws_old, old_headers, old_rows)
 
         ws_new = wb.create_sheet(title="신약 진도표")
-        new_headers = ["이름", "이모티콘"] + new_dates_sorted
-        new_rows = []
-        for user in all_users:
-            entry = users[user]
-            if entry.get("dates_new"):
-                row = [user, entry.get("emoji", "")]
-                row.extend("O" if d in entry["dates_new"] else "" for d in new_dates_sorted)
-                new_rows.append(row)
         _apply_sheet_style(ws_new, new_headers, new_rows)
     else:
         headers, rows = build_preview_data(users, track_mode)
