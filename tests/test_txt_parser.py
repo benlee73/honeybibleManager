@@ -1,4 +1,4 @@
-from app.txt_parser import parse_txt
+from app.txt_parser import extract_chat_meta, parse_txt
 
 
 class TestParseTxt:
@@ -113,3 +113,62 @@ class TestParseTxt:
         rows = parse_txt(text)
         assert len(rows) == 1
         assert rows[0] == ("홍길동", "사진")
+
+
+class TestExtractChatMeta:
+    def test_정상_헤더__방이름_및_날짜_추출(self):
+        text = (
+            "꿀성경 - 교육국 님과 카카오톡 대화\r\n"
+            "저장한 날짜 : 2026. 2. 9. 오전 10:50\r\n"
+            "\r\n"
+            "2026년 2월 1일 일요일\r\n"
+        )
+        meta = extract_chat_meta(text)
+        assert meta["room_name"] == "꿀성경 - 교육국"
+        assert meta["saved_date"] == "2026/02/09-10:50"
+
+    def test_오후_시간__12시간_변환(self):
+        text = (
+            "테스트방 님과 카카오톡 대화\r\n"
+            "저장한 날짜 : 2026. 2. 10. 오후 3:30\r\n"
+        )
+        meta = extract_chat_meta(text)
+        assert meta["room_name"] == "테스트방"
+        assert meta["saved_date"] == "2026/02/10-15:30"
+
+    def test_오후_12시__12유지(self):
+        text = (
+            "테스트방 님과 카카오톡 대화\r\n"
+            "저장한 날짜 : 2026. 2. 10. 오후 12:05\r\n"
+        )
+        meta = extract_chat_meta(text)
+        assert meta["saved_date"] == "2026/02/10-12:05"
+
+    def test_오전_12시__0시_변환(self):
+        text = (
+            "테스트방 님과 카카오톡 대화\r\n"
+            "저장한 날짜 : 2026. 2. 10. 오전 12:30\r\n"
+        )
+        meta = extract_chat_meta(text)
+        assert meta["saved_date"] == "2026/02/10-00:30"
+
+    def test_헤더_없는_텍스트__None_반환(self):
+        text = "2026. 2. 2. 오전 7:33, 홍길동 : 2/2🐷\r\n"
+        meta = extract_chat_meta(text)
+        assert meta["room_name"] is None
+        assert meta["saved_date"] is None
+
+    def test_빈_텍스트__None_반환(self):
+        meta = extract_chat_meta("")
+        assert meta["room_name"] is None
+        assert meta["saved_date"] is None
+
+    def test_Talk_헤더_포함__방이름_추출(self):
+        text = (
+            "Talk_2026.2.10 08:50-1.txt\r\n"
+            "저장한 날짜 : 2026. 2. 10. 오후 12:16\r\n"
+            "꿀성경 - 교육국 님과 카카오톡 대화\r\n"
+        )
+        meta = extract_chat_meta(text)
+        assert meta["room_name"] == "꿀성경 - 교육국"
+        assert meta["saved_date"] == "2026/02/10-12:16"

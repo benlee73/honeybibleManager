@@ -1,5 +1,13 @@
 import re
 
+# TXT 헤더 첫 줄: "XXX 님과 카카오톡 대화"
+_ROOM_NAME_RE = re.compile(r"^(.+?)\s*님과 카카오톡 대화$")
+
+# 저장 날짜 줄: "저장한 날짜 : 2026. 2. 9. 오전 10:50"
+_SAVED_DATE_RE = re.compile(
+    r"^저장한 날짜\s*:\s*(\d{4})\.\s*(\d{1,2})\.\s*(\d{1,2})\.\s*(오전|오후)\s*(\d{1,2}):(\d{2})"
+)
+
 # 사용자 메시지: "2026. 2. 2. 오전 7:33, 유저이름 : 메시지"
 _USER_MSG_RE = re.compile(
     r"^\d{4}\.\s*\d{1,2}\.\s*\d{1,2}\.\s*[오전후]+\s*\d{1,2}:\d{2},\s*(.+?)\s*:\s*(.*)"
@@ -17,6 +25,47 @@ _DATE_HEADER_RE = re.compile(
 
 # 파일 헤더 또는 저장 날짜 줄
 _FILE_HEADER_RE = re.compile(r"^(Talk_|저장한 날짜)")
+
+
+def extract_chat_meta(text):
+    """TXT 파일 헤더에서 방 이름과 저장 날짜를 추출한다.
+
+    Returns:
+        dict: {"room_name": str|None, "saved_date": str|None}
+              saved_date 형식: "YYYY/MM/DD-HH:MM"
+    """
+    lines = text.replace("\r\n", "\n").replace("\r", "\n").split("\n")
+    room_name = None
+    saved_date = None
+
+    for line in lines:
+        stripped = line.strip()
+        if not stripped:
+            continue
+
+        if room_name is None:
+            m = _ROOM_NAME_RE.match(stripped)
+            if m:
+                room_name = m.group(1).strip()
+                continue
+
+        if saved_date is None:
+            m = _SAVED_DATE_RE.match(stripped)
+            if m:
+                year, month, day = m.group(1), m.group(2), m.group(3)
+                ampm, hour, minute = m.group(4), int(m.group(5)), m.group(6)
+                if ampm == "오후" and hour != 12:
+                    hour += 12
+                elif ampm == "오전" and hour == 12:
+                    hour = 0
+                saved_date = f"{year}/{int(month):02d}/{int(day):02d}-{hour:02d}:{minute}"
+                continue
+
+        # 방이름과 저장날짜를 모두 찾았으면 조기 종료
+        if room_name is not None and saved_date is not None:
+            break
+
+    return {"room_name": room_name, "saved_date": saved_date}
 
 
 def parse_txt(text):

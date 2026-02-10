@@ -94,9 +94,12 @@ const progressText = document.getElementById("progressText");
 const imageViewButton = document.getElementById("imageViewButton");
 const imageView = document.getElementById("imageView");
 const resultImage = document.getElementById("resultImage");
+const driveButton = document.getElementById("driveButton");
 
 let currentObjectUrl = null;
 let currentImageBase64 = null;
+let currentXlsxBase64 = null;
+let currentDriveFilename = null;
 
 const setStatus = (state, message) => {
   status.dataset.state = state;
@@ -125,6 +128,13 @@ const resetDownload = () => {
     imageView.hidden = true;
   }
   currentImageBase64 = null;
+  currentXlsxBase64 = null;
+  currentDriveFilename = null;
+  if (driveButton) {
+    driveButton.classList.add("is-disabled");
+    driveButton.disabled = true;
+    driveButton.innerHTML = '구글 드라이브 저장 <span class="file-format">(XLSX)</span>';
+  }
   if (progressBar) {
     progressBar.hidden = true;
     progressFill.style.width = "0%";
@@ -437,6 +447,13 @@ form.addEventListener("submit", async (event) => {
       imageViewButton.classList.remove("is-disabled");
       imageViewButton.disabled = false;
     }
+
+    if (data.xlsx_base64 && driveButton) {
+      currentXlsxBase64 = data.xlsx_base64;
+      currentDriveFilename = data.drive_filename || null;
+      driveButton.classList.remove("is-disabled");
+      driveButton.disabled = false;
+    }
   } catch (error) {
     const message = error instanceof Error ? error.message : "분석에 실패했습니다.";
     setStatus("error", message);
@@ -458,6 +475,50 @@ if (imageViewButton) {
     } else {
       imageView.hidden = true;
       imageViewButton.innerHTML = '이미지로 보기 <span class="file-format">(PNG)</span>';
+    }
+  });
+}
+
+if (driveButton) {
+  driveButton.addEventListener("click", async () => {
+    if (!currentXlsxBase64) return;
+
+    const originalHTML = driveButton.innerHTML;
+    driveButton.innerHTML = '업로드 중... <span class="file-format">(XLSX)</span>';
+    driveButton.disabled = true;
+
+    try {
+      const response = await fetch("/upload-drive", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          xlsx_base64: currentXlsxBase64,
+          ...(currentDriveFilename && { filename: currentDriveFilename }),
+        }),
+      });
+
+      const result = await response.json();
+
+      if (result.success) {
+        driveButton.innerHTML = '저장 완료! <span class="file-format">(XLSX)</span>';
+        setTimeout(() => {
+          driveButton.innerHTML = originalHTML;
+          driveButton.disabled = false;
+        }, 3000);
+      } else {
+        const msg = result.message || "업로드에 실패했습니다.";
+        driveButton.innerHTML = `실패: ${msg}`;
+        setTimeout(() => {
+          driveButton.innerHTML = originalHTML;
+          driveButton.disabled = false;
+        }, 4000);
+      }
+    } catch (error) {
+      driveButton.innerHTML = '업로드 오류 발생';
+      setTimeout(() => {
+        driveButton.innerHTML = originalHTML;
+        driveButton.disabled = false;
+      }, 4000);
     }
   });
 }

@@ -1,4 +1,6 @@
+import base64
 import io
+import json
 import os
 import threading
 import zipfile
@@ -11,7 +13,9 @@ import pytest
 from app.handler import (
     HoneyBibleHandler,
     PUBLIC_DIR,
+    _build_drive_filename,
     _detect_file_format,
+    _extract_csv_meta,
     _extract_txt_from_zip,
     extract_multipart_field,
     extract_multipart_file,
@@ -206,3 +210,92 @@ class TestExtractTxtFromZip:
         data, error = _extract_txt_from_zip(b"not a zip")
         assert data is None
         assert "ZIP" in error
+
+
+class TestUploadDriveEndpoint:
+    def test_drive_미설정__적절한_에러_응답(self, test_server, monkeypatch):
+        monkeypatch.delenv("GOOGLE_SERVICE_ACCOUNT_JSON", raising=False)
+        monkeypatch.delenv("GOOGLE_DRIVE_FOLDER_ID", raising=False)
+
+        xlsx_b64 = base64.b64encode(b"fake xlsx content").decode("ascii")
+        body = json.dumps({"xlsx_base64": xlsx_b64}).encode("utf-8")
+
+        req = Request(
+            f"{test_server}/upload-drive",
+            data=body,
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        resp = urlopen(req)
+        assert resp.status == 200
+        data = json.loads(resp.read())
+        assert data["success"] is False
+        assert "설정되지 않았습니다" in data["message"]
+
+    def test_xlsx_base64_누락__400_에러(self, test_server):
+        body = json.dumps({}).encode("utf-8")
+        req = Request(
+            f"{test_server}/upload-drive",
+            data=body,
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        try:
+            urlopen(req)
+            assert False, "400 에러가 발생해야 합니다"
+        except Exception as exc:
+            assert "400" in str(exc)
+
+    def test_잘못된_JSON__400_에러(self, test_server):
+        body = b"not json at all"
+        req = Request(
+            f"{test_server}/upload-drive",
+            data=body,
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        try:
+            urlopen(req)
+            assert False, "400 에러가 발생해야 합니다"
+        except Exception as exc:
+            assert "400" in str(exc)
+
+
+class TestExtractCsvMeta:
+    def test_정상_CSV_파일명__방이름_및_시점_추출(self):
+        room, date = _extract_csv_meta("KakaoTalk_Chat_꿀성경 - 교육국_2026-02-09-10-50-28.csv")
+        assert room == "꿀성경 - 교육국"
+        assert date == "2026/02/09-10:50"
+
+    def test_초_없는_CSV_파일명__정상_추출(self):
+        room, date = _extract_csv_meta("KakaoTalk_Chat_테스트방_2026-01-15-08-30.csv")
+        assert room == "테스트방"
+        assert date == "2026/01/15-08:30"
+
+    def test_일반_파일명__None_반환(self):
+        room, date = _extract_csv_meta("data.csv")
+        assert room is None
+        assert date is None
+
+    def test_None_파일명__None_반환(self):
+        room, date = _extract_csv_meta(None)
+        assert room is None
+        assert date is None
+
+
+class TestBuildDriveFilename:
+    def test_방이름_및_날짜_모두_있음(self):
+        result = _build_drive_filename("꿀성경 - 교육국", "2026/02/09-10:50")
+        assert result == "result_꿀성경 - 교육국_2026/02/09-10:50.xlsx"
+
+    def test_방이름만_있음(self):
+        result = _build_drive_filename("테스트방", None)
+        assert result == "result_테스트방.xlsx"
+
+    def test_날짜만_있음(self):
+        result = _build_drive_filename(None, "2026/02/09-10:50")
+        assert result == "result_결과_2026/02/09-10:50.xlsx"
+
+    def test_둘_다_없음__None_반환(self):
+        result = _build_drive_filename(None, None)
+        assert result is None

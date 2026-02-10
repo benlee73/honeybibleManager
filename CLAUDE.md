@@ -6,7 +6,7 @@
 
 ## 기술 스택
 
-- Python 3.12+ / openpyxl (XLSX 생성) / Pillow (PNG 이미지 생성)
+- Python 3.12+ / openpyxl (XLSX 생성) / Pillow (PNG 이미지 생성) / google-api-python-client + google-auth + google-auth-oauthlib (Google Drive OAuth 업로드)
 - 의존성 관리: Poetry
 - 테스트: pytest (dev 의존성)
 
@@ -15,16 +15,19 @@
 ```
 server.py              # 진입점. HTTPServer 실행 (--host, --port)
 app/
-  handler.py           # HoneyBibleHandler: HTTP 요청 처리 (GET 정적파일, POST /analyze), 파일 형식 감지(CSV/TXT/ZIP)
+  handler.py           # HoneyBibleHandler: HTTP 요청 처리 (GET 정적파일, POST /analyze, POST /upload-drive), 파일 형식 감지(CSV/TXT/ZIP)
   analyzer.py          # analyze_chat(), parse_csv_rows(), build_output_csv(), build_preview_data(), build_dual_preview_data(), build_output_xlsx(), extract_tracks(): 분석/결과 생성/트랙 감지
   image_builder.py     # build_output_image(): 분석 결과를 PNG 이미지로 생성 (통계 카드 + 진도표 테이블, 4종 테마 지원, 2x Retina 대응)
   txt_parser.py        # parse_txt(): 카카오톡 모바일 TXT 내보내기 파싱 (멀티라인, 시스템 메시지 스킵)
   schedule.py          # BIBLE_DATES, NT_DATES, detect_schedule(): 진도표 날짜 생성 및 키워드 기반 진도표 선택
   date_parser.py       # parse_dates(): 메시지에서 날짜 파싱 (범위~/-,  쉼표, M/D 형식)
   emoji.py             # extract_trailing_emoji(), normalize_emoji(): 이모티콘 추출/정규화
+  drive_uploader.py    # is_drive_configured(), upload_to_drive(): Google Drive 업로드 (OAuth refresh token 방식)
   logger.py            # setup_logging(), get_logger(): 콘솔+파일(server.log) 로깅 설정
   fonts/               # Jua, 나눔고딕, NotoEmoji TTF 번들 (OFL 라이선스, 이미지 생성용 한글/이모지 폰트)
 tests/                 # 각 app 모듈에 대응하는 테스트 파일
+scripts/
+  get_google_token.py  # 1회성 OAuth refresh token 발급 스크립트 (poetry run python scripts/get_google_token.py)
 public/                # 프론트엔드 정적 파일 (index.html, app.js, styles.css)
 ```
 
@@ -37,6 +40,7 @@ public/                # 프론트엔드 정적 파일 (index.html, app.js, styl
 5. `date_parser.py`와 `emoji.py`가 각각 날짜/이모티콘 추출 담당
 6. 결과를 스타일 적용된 XLSX와 PNG 이미지로 변환하고, JSON 응답(xlsx_base64 + image_base64 + preview 데이터)으로 반환
 7. 프론트엔드에서 "이미지로 보기" 버튼 클릭 시 PNG 이미지를 `<img>` 태그로 표시 (모바일에서 길게 눌러 사진 저장 가능)
+8. (선택) "구글 드라이브 저장" 버튼 클릭 시 `POST /upload-drive`로 XLSX base64를 전송하여 Google Drive에 업로드
 
 ## 분석 규칙 요약
 
@@ -45,6 +49,15 @@ public/                # 프론트엔드 정적 파일 (index.html, app.js, styl
   - 성경일독: 월~토 읽기 (일요일 쉼), 신약일독: 월~금 읽기 (토·일요일 쉼)
   - Single 모드: CSV 메시지에서 '창세기'+'출애굽기' → 성경일독, '마태복음'+'마가복음' → 신약일독 진도표 적용 (키워드 없으면 필터 미적용)
   - Dual 모드: 구약 → 성경일독, 신약 → 신약일독 진도표 자동 적용
+
+## 환경변수 (Google Drive 업로드용, 선택)
+
+- `GOOGLE_CLIENT_ID`: OAuth 2.0 클라이언트 ID
+- `GOOGLE_CLIENT_SECRET`: OAuth 2.0 클라이언트 보안 비밀번호
+- `GOOGLE_REFRESH_TOKEN`: OAuth 2.0 refresh token (`scripts/get_google_token.py`로 발급)
+- `GOOGLE_DRIVE_FOLDER_ID`: 업로드 대상 폴더 ID (URL에서 추출)
+
+네 환경변수가 모두 설정되어 있어야 Drive 업로드 기능이 활성화된다. 미설정 시 버튼 클릭 시 안내 메시지를 표시한다.
 
 ## 작업 규칙
 

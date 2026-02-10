@@ -4,3 +4,4 @@
 __pycache__/
 KakaoTalk_Chat_*.csv
 server.log
+.env
