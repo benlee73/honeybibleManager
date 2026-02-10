@@ -178,3 +178,29 @@ class TestParseDatesLeadingTilde:
     def test_중간_틸드__last_date_전달__기존_범위_확장_유지(self):
         result = parse_dates("2/4~2/7", last_date=(2, 1))
         assert result == ["2/4", "2/5", "2/6", "2/7"]
+
+
+class TestParseDatesHyphenRange:
+    def test_하이픈_범위__기본(self):
+        result = parse_dates("2/6-7")
+        assert result == ["2/6", "2/7"]
+
+    def test_하이픈_범위__이모지_포함(self):
+        result = parse_dates("2/6-7🌷")
+        assert result == ["2/6", "2/7"]
+
+    def test_하이픈_범위__월_경계(self):
+        result = parse_dates("1/30-2/2")
+        assert result == ["1/30", "1/31", "2/1", "2/2"]
+
+    def test_하이픈_범위__콤마_조합(self):
+        result = parse_dates("2/6-8,10")
+        assert result == ["2/6", "2/7", "2/8", "2/10"]
+
+    def test_선행_하이픈__기본_확장(self):
+        result = parse_dates("-2/7", last_date=(2, 4))
+        assert result == ["2/5", "2/6", "2/7"]
+
+    def test_선행_하이픈__last_date_없으면_기존_동작(self):
+        result = parse_dates("-2/7")
+        assert result == ["2/7"]

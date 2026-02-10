@@ -86,7 +86,7 @@ def parse_dates(message, last_date=None):
     results = []
     index = 0
 
-    if cleaned.startswith("~") and last_date is not None:
+    if cleaned[:1] in ("~", "-") and last_date is not None:
         index = 1
         match = DATE_TOKEN_PATTERN.search(cleaned, index)
         if match and match.start() == index:
@@ -100,14 +100,14 @@ def parse_dates(message, last_date=None):
                 current_day = day
                 index = match.end()
 
-                while index < len(cleaned) and cleaned[index] in ("~", ","):
+                while index < len(cleaned) and cleaned[index] in ("~", "-", ","):
                     separator = cleaned[index]
                     index += 1
                     parsed = parse_date_or_day(cleaned, index, current_month)
                     if not parsed:
                         break
                     next_month, next_day, index = parsed
-                    if separator == "~":
+                    if separator in ("~", "-"):
                         results.extend(
                             expand_range(current_month, current_day, next_month, next_day)
                         )
@@ -133,14 +133,14 @@ def parse_dates(message, last_date=None):
         current_day = day
         index = match.end()
 
-        while index < len(cleaned) and cleaned[index] in ("~", ","):
+        while index < len(cleaned) and cleaned[index] in ("~", "-", ","):
             separator = cleaned[index]
             index += 1
             parsed = parse_date_or_day(cleaned, index, current_month)
             if not parsed:
                 break
             next_month, next_day, index = parsed
-            if separator == "~":
+            if separator in ("~", "-"):
                 results.extend(
                     expand_range(current_month, current_day, next_month, next_day)
                 )

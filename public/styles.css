@@ -542,6 +542,22 @@ button,
   margin-bottom: 6px;
 }
 
+.steps-heading {
+  font-family: var(--font-display);
+  font-size: 14px;
+  font-weight: normal;
+  color: var(--ink-1);
+  margin: 14px 0 6px;
+}
+
+.steps-heading:first-child {
+  margin-top: 0;
+}
+
+.steps-group .steps {
+  margin-bottom: 0;
+}
+
 .footnote {
   margin: 0;
   font-size: 13px;
