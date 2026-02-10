@@ -17,20 +17,20 @@ server.py              # 진입점. HTTPServer 실행 (--host, --port)
 app/
   handler.py           # HoneyBibleHandler: HTTP 요청 처리 (GET 정적파일, POST /analyze), 파일 형식 감지(CSV/TXT/ZIP)
   analyzer.py          # analyze_chat(), parse_csv_rows(), build_output_csv(), build_preview_data(), build_dual_preview_data(), build_output_xlsx(), extract_tracks(): 분석/결과 생성/트랙 감지
-  image_builder.py     # build_output_image(): 분석 결과를 PNG 이미지로 생성 (통계 카드 + 진도표 테이블, 허니 테마)
+  image_builder.py     # build_output_image(): 분석 결과를 PNG 이미지로 생성 (통계 카드 + 진도표 테이블, 4종 테마 지원, 2x Retina 대응)
   txt_parser.py        # parse_txt(): 카카오톡 모바일 TXT 내보내기 파싱 (멀티라인, 시스템 메시지 스킵)
   schedule.py          # BIBLE_DATES, NT_DATES, detect_schedule(): 진도표 날짜 생성 및 키워드 기반 진도표 선택
-  date_parser.py       # parse_dates(): 메시지에서 날짜 파싱 (범위~, 쉼표, M/D 형식)
+  date_parser.py       # parse_dates(): 메시지에서 날짜 파싱 (범위~/-,  쉼표, M/D 형식)
   emoji.py             # extract_trailing_emoji(), normalize_emoji(): 이모티콘 추출/정규화
   logger.py            # setup_logging(), get_logger(): 콘솔+파일(server.log) 로깅 설정
-  fonts/               # 나눔고딕 TTF 번들 (OFL 라이선스, 이미지 생성용 한글 폰트)
+  fonts/               # Jua, 나눔고딕, NotoEmoji TTF 번들 (OFL 라이선스, 이미지 생성용 한글/이모지 폰트)
 tests/                 # 각 app 모듈에 대응하는 테스트 파일
 public/                # 프론트엔드 정적 파일 (index.html, app.js, styles.css)
 ```
 
 ## 핵심 동작 흐름
 
-1. 클라이언트가 대화 파일(CSV/TXT/ZIP)과 `track_mode`(`single`/`dual`)를 `POST /analyze`로 업로드
+1. 클라이언트가 대화 파일(CSV/TXT/ZIP)과 `track_mode`(`single`/`dual`), `theme`(honey/bw/brew/neon)를 `POST /analyze`로 업로드
 2. `handler.py`가 multipart 데이터에서 파일과 트랙 모드 추출, 파일 형식 감지(매직바이트/확장자)
 3. 파일 형식에 따라 파싱: CSV → `parse_csv_rows()`, TXT → `parse_txt()`, ZIP → TXT 추출 후 `parse_txt()`
 4. `analyzer.py`가 `(user, message)` 리스트를 분석하여 사용자별 이모티콘 할당 및 날짜 수집 (투트랙 모드 시 구약/신약 분리)
