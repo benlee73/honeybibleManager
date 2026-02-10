@@ -10,9 +10,11 @@ from app.analyzer import (
     build_preview_data,
     choose_assigned_emoji,
     decode_csv_payload,
+    decode_payload,
     extract_tracks,
     iter_data_rows,
     message_contains_emoji,
+    parse_csv_rows,
     sort_dates,
 )
 
@@ -839,3 +841,64 @@ class TestAnalyzeChatScheduleFilter:
         assert "2/2" in result["user1"]["dates"]
         assert "2/3" in result["user1"]["dates"]
         assert "2/8" not in result["user1"]["dates"]
+
+
+class TestParseCsvRows:
+    def _make_csv(self, rows):
+        output = io.StringIO(newline="")
+        writer = csv.writer(output)
+        for row in rows:
+            writer.writerow(row)
+        return output.getvalue()
+
+    def test_parse_csv_rows__헤더_스킵_후_데이터_반환(self):
+        csv_text = self._make_csv([
+            ["날짜", "이름", "메시지"],
+            ["2024-01-01", "user1", "hello"],
+        ])
+        rows = parse_csv_rows(csv_text)
+        assert len(rows) == 1
+        assert rows[0] == ("user1", "hello")
+
+    def test_parse_csv_rows__빈_입력__빈_리스트(self):
+        assert parse_csv_rows("") == []
+
+    def test_parse_csv_rows__짧은_행_스킵(self):
+        csv_text = self._make_csv([
+            ["날짜", "이름", "메시지"],
+            ["2024-01-01", "user1"],
+        ])
+        rows = parse_csv_rows(csv_text)
+        assert rows == []
+
+
+class TestDecodePayloadAlias:
+    def test_decode_payload__동일_결과(self):
+        payload = "한글".encode("utf-8")
+        assert decode_payload(payload) == decode_csv_payload(payload)
+
+
+class TestAnalyzeChatWithRows:
+    def test_rows_파라미터_직접_전달(self):
+        rows = [
+            ("user1", "3/15😀"),
+            ("user1", "3/16😀"),
+        ]
+        result = analyze_chat(rows=rows)
+        assert "user1" in result
+        assert result["user1"]["dates"] == {"3/15", "3/16"}
+
+    def test_rows_파라미터_dual_모드(self):
+        rows = [
+            ("user1", "2/2 구약 😀"),
+            ("user1", "2/3 신약 😀"),
+        ]
+        result = analyze_chat(rows=rows, track_mode="dual")
+        assert "user1" in result
+        assert result["user1"]["dates_old"] == {"2/2"}
+        assert result["user1"]["dates_new"] == {"2/3"}
+
+    def test_csv_text와_rows_동시_전달시_rows_우선(self):
+        rows = [("user1", "3/15😀")]
+        result = analyze_chat(csv_text="invalid", rows=rows)
+        assert "user1" in result

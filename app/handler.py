@@ -2,22 +2,53 @@ import base64
 import json
 import mimetypes
 import os
+import zipfile
 from email.parser import BytesParser
 from email.policy import default
 from http.server import BaseHTTPRequestHandler
+from io import BytesIO
 from urllib.parse import unquote
 
 from app.analyzer import (
     analyze_chat,
     build_output_xlsx,
     build_preview_data,
-    decode_csv_payload,
+    decode_payload,
+    parse_csv_rows,
 )
 from app.logger import get_logger
+from app.txt_parser import parse_txt
 
 logger = get_logger("handler")
 
 PUBLIC_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "public")
+
+_ZIP_MAGIC = b"PK\x03\x04"
+
+
+def _detect_file_format(filename, file_bytes):
+    """확장자와 매직바이트로 파일 형식을 판별한다. csv/txt/zip 중 하나를 반환."""
+    if file_bytes[:4] == _ZIP_MAGIC:
+        return "zip"
+    if filename:
+        ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
+        if ext == "zip":
+            return "zip"
+        if ext == "txt":
+            return "txt"
+    return "csv"
+
+
+def _extract_txt_from_zip(file_bytes):
+    """ZIP 파일에서 첫 번째 TXT 파일을 추출하여 바이트로 반환한다."""
+    try:
+        zf = zipfile.ZipFile(BytesIO(file_bytes))
+    except zipfile.BadZipFile:
+        return None, "올바른 ZIP 파일이 아닙니다."
+    txt_names = [n for n in zf.namelist() if n.lower().endswith(".txt")]
+    if not txt_names:
+        return None, "ZIP 파일 안에 TXT 파일이 없습니다."
+    return zf.read(txt_names[0]), None
 
 
 def _parse_multipart(payload, content_type):
@@ -232,15 +263,30 @@ class HoneyBibleHandler(BaseHTTPRequestHandler):
             return
 
         if not file_bytes:
-            self._send_json(400, {"message": "CSV file is empty"})
+            self._send_json(400, {"message": "파일이 비어 있습니다."})
             return
 
         track_mode = extract_multipart_field(payload, content_type, "track_mode")
         if track_mode not in ("single", "dual"):
             track_mode = "single"
 
-        csv_text = decode_csv_payload(file_bytes)
-        users = analyze_chat(csv_text, track_mode=track_mode)
+        file_format = _detect_file_format(filename, file_bytes)
+
+        if file_format == "zip":
+            txt_bytes, zip_error = _extract_txt_from_zip(file_bytes)
+            if zip_error:
+                self._send_json(400, {"message": zip_error})
+                return
+            text = decode_payload(txt_bytes)
+            rows = parse_txt(text)
+        elif file_format == "txt":
+            text = decode_payload(file_bytes)
+            rows = parse_txt(text)
+        else:
+            csv_text = decode_payload(file_bytes)
+            rows = parse_csv_rows(csv_text)
+
+        users = analyze_chat(rows=rows, track_mode=track_mode)
         xlsx_bytes = build_output_xlsx(users, track_mode=track_mode)
         headers, rows = build_preview_data(users, track_mode=track_mode)
         logger.info("분석 완료: %d명 처리", len(users))

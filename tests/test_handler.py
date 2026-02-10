@@ -1,13 +1,21 @@
 import io
 import os
 import threading
+import zipfile
 from http.server import HTTPServer
 from unittest.mock import patch
 from urllib.request import Request, urlopen
 
 import pytest
 
-from app.handler import HoneyBibleHandler, PUBLIC_DIR, extract_multipart_field, extract_multipart_file
+from app.handler import (
+    HoneyBibleHandler,
+    PUBLIC_DIR,
+    _detect_file_format,
+    _extract_txt_from_zip,
+    extract_multipart_field,
+    extract_multipart_file,
+)
 
 
 def _make_multipart_payload(field_name, filename, content, boundary="testboundary"):
@@ -152,3 +160,49 @@ class TestHealthEndpoint:
         body = resp.read()
         assert b'"status"' in body
         assert b'"ok"' in body
+
+
+class TestDetectFileFormat:
+    def test_zip_매직바이트__zip_반환(self):
+        assert _detect_file_format("file.csv", b"PK\x03\x04rest") == "zip"
+
+    def test_zip_확장자__zip_반환(self):
+        assert _detect_file_format("chat.zip", b"some bytes") == "zip"
+
+    def test_txt_확장자__txt_반환(self):
+        assert _detect_file_format("chat.txt", b"some text") == "txt"
+
+    def test_csv_확장자__csv_반환(self):
+        assert _detect_file_format("chat.csv", b"col1,col2") == "csv"
+
+    def test_확장자_없음__csv_기본값(self):
+        assert _detect_file_format("chatfile", b"col1,col2") == "csv"
+
+    def test_filename_None__csv_기본값(self):
+        assert _detect_file_format(None, b"col1,col2") == "csv"
+
+
+class TestExtractTxtFromZip:
+    def _make_zip(self, files):
+        buf = io.BytesIO()
+        with zipfile.ZipFile(buf, "w") as zf:
+            for name, content in files.items():
+                zf.writestr(name, content)
+        return buf.getvalue()
+
+    def test_정상_zip__txt_추출(self):
+        zip_bytes = self._make_zip({"chat.txt": "hello", "image.png": "png"})
+        data, error = _extract_txt_from_zip(zip_bytes)
+        assert error is None
+        assert data == b"hello"
+
+    def test_txt_없는_zip__에러_반환(self):
+        zip_bytes = self._make_zip({"image.png": "png"})
+        data, error = _extract_txt_from_zip(zip_bytes)
+        assert data is None
+        assert "TXT" in error
+
+    def test_잘못된_zip__에러_반환(self):
+        data, error = _extract_txt_from_zip(b"not a zip")
+        assert data is None
+        assert "ZIP" in error

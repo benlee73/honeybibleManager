@@ -24,13 +24,17 @@ def _max_date(dates):
     return best
 
 
-def decode_csv_payload(payload):
+def decode_payload(payload):
     for encoding in ("utf-8-sig", "utf-8", "cp949", "euc-kr"):
         try:
             return payload.decode(encoding)
         except UnicodeDecodeError:
             continue
     return payload.decode("utf-8", errors="replace")
+
+
+# 하위호환 alias
+decode_csv_payload = decode_payload
 
 
 def iter_data_rows(reader):
@@ -71,7 +75,8 @@ def extract_tracks(message):
     return tracks
 
 
-def analyze_chat(csv_text, track_mode="single"):
+def parse_csv_rows(csv_text):
+    """CSV 텍스트를 파싱하여 (user, message) 튜플 리스트를 반환한다."""
     rows = []
     reader = csv.reader(io.StringIO(csv_text, newline=""))
     for row in iter_data_rows(reader):
@@ -82,6 +87,12 @@ def analyze_chat(csv_text, track_mode="single"):
         if not user or not message:
             continue
         rows.append((user, message))
+    return rows
+
+
+def analyze_chat(csv_text=None, track_mode="single", rows=None):
+    if rows is None:
+        rows = parse_csv_rows(csv_text or "")
 
     emoji_counts = {}
     emoji_order = {}
