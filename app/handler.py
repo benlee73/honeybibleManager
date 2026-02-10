@@ -287,9 +287,11 @@ class HoneyBibleHandler(BaseHTTPRequestHandler):
             csv_text = decode_payload(file_bytes)
             rows = parse_csv_rows(csv_text)
 
+        theme = extract_multipart_field(payload, content_type, "theme") or "honey"
+
         users = analyze_chat(rows=rows, track_mode=track_mode)
         xlsx_bytes = build_output_xlsx(users, track_mode=track_mode)
-        image_bytes = build_output_image(users, track_mode=track_mode)
+        image_bytes = build_output_image(users, track_mode=track_mode, theme=theme)
         headers, rows = build_preview_data(users, track_mode=track_mode)
         logger.info("분석 완료: %d명 처리", len(users))
 
