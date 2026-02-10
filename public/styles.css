@@ -529,38 +529,61 @@ button,
   display: inline-block;
 }
 
-.guide-tabs {
+.note-header {
   display: flex;
-  gap: 6px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
   margin-bottom: 14px;
-}
-
-.guide-tab {
-  font-family: var(--font-body);
-  font-size: 13px;
-  font-weight: 600;
-  padding: 6px 14px;
-  border-radius: 999px;
-  border: 1px solid var(--line);
-  background: transparent;
-  color: var(--ink-2);
-  cursor: pointer;
-  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
-}
-
-.guide-tab:hover {
-  border-color: var(--accent);
-}
-
-.guide-tab.is-active {
-  background: var(--accent);
-  color: var(--surface);
-  border-color: var(--accent);
 }
 
 .note h2 {
   font-family: var(--font-display);
-  margin: 0 0 10px;
+  margin: 0;
+}
+
+.guide-toggle {
+  position: relative;
+  display: flex;
+  background: var(--input-bg);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 3px;
+}
+
+.guide-toggle-btn {
+  position: relative;
+  z-index: 1;
+  padding: 5px 14px;
+  font-family: var(--font-body);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink-2);
+  background: transparent;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: color 0.2s ease;
+}
+
+.guide-toggle-btn.is-active {
+  color: var(--ink-1);
+}
+
+.guide-toggle-indicator {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: calc(50% - 3px);
+  height: calc(100% - 6px);
+  background: var(--cream-2);
+  border-radius: 8px;
+  transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  pointer-events: none;
+}
+
+.guide-toggle[data-active="mobile"] .guide-toggle-indicator {
+  transform: translateX(100%);
 }
 
 .note ul {
@@ -884,6 +907,10 @@ body[data-theme="bw"] .file-input:focus-within {
   box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.15);
 }
 
+body[data-theme="bw"] .guide-toggle-indicator {
+  background: rgba(255, 255, 255, 0.12);
+}
+
 
 /* Brew 테마 (brew.sh 스타일 — 다크 브라운 + 골드/앰버) */
 body[data-theme="brew"] {
@@ -937,6 +964,10 @@ body[data-theme="brew"] .file-input:focus-within {
   box-shadow: 0 0 0 3px rgba(190, 134, 45, 0.2);
 }
 
+body[data-theme="brew"] .guide-toggle-indicator {
+  background: rgba(190, 134, 45, 0.15);
+}
+
 
 /* 네온 테마 */
 body[data-theme="neon"] {
@@ -988,6 +1019,10 @@ body[data-theme="neon"] .file-input:hover {
 body[data-theme="neon"] .file-input:focus-within {
   border-color: rgba(0, 229, 255, 0.6);
   box-shadow: 0 0 0 3px rgba(0, 229, 255, 0.2);
+}
+
+body[data-theme="neon"] .guide-toggle-indicator {
+  background: rgba(57, 255, 20, 0.1);
 }
 
 

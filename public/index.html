@@ -83,10 +83,13 @@
       </section>
 
       <section class="panel note">
-        <h2>사용 방법</h2>
-        <div class="guide-tabs" role="tablist">
-          <button class="guide-tab is-active" role="tab" aria-selected="true" data-tab="pc">PC</button>
-          <button class="guide-tab" role="tab" aria-selected="false" data-tab="mobile">모바일</button>
+        <div class="note-header">
+          <h2>사용 방법</h2>
+          <div class="guide-toggle">
+            <button class="guide-toggle-btn is-active" type="button" data-tab="pc">PC</button>
+            <button class="guide-toggle-btn" type="button" data-tab="mobile">모바일</button>
+            <span class="guide-toggle-indicator"></span>
+          </div>
         </div>
         <ol class="steps" role="tabpanel" data-panel="pc">
           <li>카카오톡 단체 채팅방 설정</li>

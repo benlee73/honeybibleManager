@@ -532,18 +532,24 @@ window.addEventListener("beforeunload", () => {
 const switchGuideTab = (target) => {
   const note = document.querySelector(".note");
   if (!note) return;
-  note.querySelectorAll(".guide-tab").forEach((t) => {
-    const active = t.dataset.tab === target;
-    t.classList.toggle("is-active", active);
-    t.setAttribute("aria-selected", String(active));
-  });
   note.querySelectorAll("[data-panel]").forEach((panel) => {
     panel.hidden = panel.dataset.panel !== target;
   });
+  const toggle = note.querySelector(".guide-toggle");
+  if (toggle) {
+    toggle.dataset.active = target;
+    toggle.querySelectorAll(".guide-toggle-btn").forEach((btn) => {
+      btn.classList.toggle("is-active", btn.dataset.tab === target);
+    });
+  }
 };
 
-document.querySelectorAll(".guide-tab").forEach((tab) => {
-  tab.addEventListener("click", () => switchGuideTab(tab.dataset.tab));
+document.querySelectorAll(".guide-toggle-btn").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    const toggle = btn.closest(".guide-toggle");
+    const current = toggle ? toggle.dataset.active || "pc" : "pc";
+    switchGuideTab(current === "pc" ? "mobile" : "pc");
+  });
 });
 
 if (/Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent)) {
