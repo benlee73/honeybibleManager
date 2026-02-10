@@ -118,12 +118,12 @@
             <a class="download is-disabled" id="downloadButton" href="#" aria-disabled="true">
               결과 다운로드 <span class="file-format">(엑셀 파일)</span>
             </a>
-            <button class="download is-disabled" id="imageViewButton" type="button" disabled>
-              이미지로 보기 <span class="file-format">(PNG)</span>
+            <button class="download-outline is-disabled" id="driveButton" type="button" disabled>
+              구글 드라이브로 업로드
             </button>
-            <button class="download is-disabled" id="driveButton" type="button" disabled>
-              구글 드라이브 저장 <span class="file-format">(XLSX)</span>
-            </button>
+            <a class="download-link" href="https://drive.google.com/drive/folders/1_BShxRW0gOSRrwMv8-MYR1E6P22zXMp4" target="_blank" rel="noopener noreferrer">
+              구글 드라이브 열기 →
+            </a>
           </div>
         </div>
         <div class="stats-row">
@@ -147,7 +147,7 @@
         <div class="table-wrap">
           <table class="preview-table" id="previewTable"></table>
         </div>
-        <div class="image-view" id="imageView" hidden>
+        <div class="image-view" id="imageView">
           <p class="image-hint">아래 이미지를 길게 눌러 저장할 수 있습니다.</p>
           <img id="resultImage" alt="꿀성경 진도표 결과" />
         </div>

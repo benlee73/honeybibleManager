@@ -91,7 +91,7 @@ body {
   z-index: 1;
   max-width: 1120px;
   margin: 0 auto;
-  padding: 72px 24px 96px;
+  padding: 72px 52px 96px;
   display: grid;
   gap: 28px;
   grid-template-columns: repeat(12, minmax(0, 1fr));
@@ -385,8 +385,8 @@ button,
   background: var(--honey-3);
   color: #fffaf2;
   border: none;
-  padding: 14px 44px;
-  font-size: 16px;
+  padding: 10px 28px;
+  font-size: 14px;
   box-shadow: 0 6px 14px var(--btn-shadow);
 }
 
@@ -399,6 +399,45 @@ button,
   opacity: 0.45;
   cursor: not-allowed;
   pointer-events: none;
+}
+
+.download-outline {
+  background: transparent;
+  color: var(--honey-3);
+  border: 2px solid var(--honey-3);
+  padding: 8px 28px;
+  font-size: 14px;
+  box-shadow: none;
+}
+
+.download-outline:hover {
+  background: var(--honey-3);
+  color: #fffaf2;
+  transform: translateY(-1px);
+  box-shadow: 0 6px 14px var(--btn-shadow);
+}
+
+.download-outline.is-disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+.download-link {
+  background: transparent;
+  color: var(--ink-2);
+  border: none;
+  padding: 8px 12px;
+  font-size: 13px;
+  box-shadow: none;
+  text-decoration: none;
+}
+
+.download-link:hover {
+  color: var(--honey-3);
+  text-decoration: underline;
+  transform: none;
+  box-shadow: none;
 }
 
 /* 프로그레스 바 */
@@ -966,8 +1005,13 @@ body[data-theme="neon"] .file-input:focus-within {
     flex-direction: column;
   }
 
-  .download-group .download {
+  .download-group .download,
+  .download-group .download-outline {
     width: 100%;
+    text-align: center;
+  }
+
+  .download-group .download-link {
     text-align: center;
   }
 

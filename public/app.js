@@ -91,7 +91,6 @@ const previewTable = document.getElementById("previewTable");
 const progressBar = document.getElementById("progressBar");
 const progressFill = document.getElementById("progressFill");
 const progressText = document.getElementById("progressText");
-const imageViewButton = document.getElementById("imageViewButton");
 const imageView = document.getElementById("imageView");
 const resultImage = document.getElementById("resultImage");
 const driveButton = document.getElementById("driveButton");
@@ -119,21 +118,16 @@ const resetDownload = () => {
   downloadButton.setAttribute("aria-disabled", "true");
   downloadButton.removeAttribute("href");
   downloadButton.removeAttribute("download");
-  if (imageViewButton) {
-    imageViewButton.classList.add("is-disabled");
-    imageViewButton.disabled = true;
-    imageViewButton.innerHTML = '이미지로 보기 <span class="file-format">(PNG)</span>';
-  }
-  if (imageView) {
-    imageView.hidden = true;
-  }
   currentImageBase64 = null;
+  if (resultImage) {
+    resultImage.removeAttribute("src");
+  }
   currentXlsxBase64 = null;
   currentDriveFilename = null;
   if (driveButton) {
     driveButton.classList.add("is-disabled");
     driveButton.disabled = true;
-    driveButton.innerHTML = '구글 드라이브 저장 <span class="file-format">(XLSX)</span>';
+    driveButton.innerHTML = '구글 드라이브로 업로드';
   }
   if (progressBar) {
     progressBar.hidden = true;
@@ -442,10 +436,9 @@ form.addEventListener("submit", async (event) => {
     downloadButton.classList.remove("is-disabled");
     downloadButton.setAttribute("aria-disabled", "false");
 
-    if (data.image_base64 && imageViewButton) {
+    if (data.image_base64 && resultImage) {
       currentImageBase64 = data.image_base64;
-      imageViewButton.classList.remove("is-disabled");
-      imageViewButton.disabled = false;
+      resultImage.src = `data:image/png;base64,${currentImageBase64}`;
     }
 
     if (data.xlsx_base64 && driveButton) {
@@ -464,27 +457,12 @@ form.addEventListener("submit", async (event) => {
   }
 });
 
-if (imageViewButton) {
-  imageViewButton.addEventListener("click", () => {
-    if (!currentImageBase64 || !imageView || !resultImage) return;
-    if (imageView.hidden) {
-      resultImage.src = `data:image/png;base64,${currentImageBase64}`;
-      imageView.hidden = false;
-      imageViewButton.innerHTML = '이미지 닫기 <span class="file-format">(PNG)</span>';
-      imageView.scrollIntoView({ behavior: "smooth" });
-    } else {
-      imageView.hidden = true;
-      imageViewButton.innerHTML = '이미지로 보기 <span class="file-format">(PNG)</span>';
-    }
-  });
-}
-
 if (driveButton) {
   driveButton.addEventListener("click", async () => {
     if (!currentXlsxBase64) return;
 
     const originalHTML = driveButton.innerHTML;
-    driveButton.innerHTML = '업로드 중... <span class="file-format">(XLSX)</span>';
+    driveButton.innerHTML = '업로드 중...';
     driveButton.disabled = true;
 
     try {
@@ -500,7 +478,7 @@ if (driveButton) {
       const result = await response.json();
 
       if (result.success) {
-        driveButton.innerHTML = '저장 완료! <span class="file-format">(XLSX)</span>';
+        driveButton.innerHTML = '업로드 완료!';
         setTimeout(() => {
           driveButton.innerHTML = originalHTML;
           driveButton.disabled = false;
