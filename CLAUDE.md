@@ -2,7 +2,7 @@
 
 ## 프로젝트 개요
 
-카카오톡 대화 CSV를 업로드하면 멤버별 이모티콘/날짜를 분석하여 결과 CSV로 반환하는 웹 서버.
+카카오톡 대화 파일(CSV/TXT/ZIP)을 업로드하면 멤버별 이모티콘/날짜를 분석하여 결과 XLSX로 반환하는 웹 서버. PC 카카오톡(CSV)과 모바일 카카오톡(TXT/ZIP) 내보내기를 모두 지원한다.
 
 ## 기술 스택
 
@@ -15,8 +15,9 @@
 ```
 server.py              # 진입점. HTTPServer 실행 (--host, --port)
 app/
-  handler.py           # HoneyBibleHandler: HTTP 요청 처리 (GET 정적파일, POST /analyze), extract_multipart_field()
-  analyzer.py          # analyze_chat(), build_output_csv(), build_preview_data(), build_output_xlsx(), extract_tracks(): CSV 분석/결과 생성/트랙 감지
+  handler.py           # HoneyBibleHandler: HTTP 요청 처리 (GET 정적파일, POST /analyze), 파일 형식 감지(CSV/TXT/ZIP)
+  analyzer.py          # analyze_chat(), parse_csv_rows(), build_output_csv(), build_preview_data(), build_output_xlsx(), extract_tracks(): 분석/결과 생성/트랙 감지
+  txt_parser.py        # parse_txt(): 카카오톡 모바일 TXT 내보내기 파싱 (멀티라인, 시스템 메시지 스킵)
   schedule.py          # BIBLE_DATES, NT_DATES, detect_schedule(): 진도표 날짜 생성 및 키워드 기반 진도표 선택
   date_parser.py       # parse_dates(): 메시지에서 날짜 파싱 (범위~, 쉼표, M/D 형식)
   emoji.py             # extract_trailing_emoji(), normalize_emoji(): 이모티콘 추출/정규화
@@ -27,11 +28,12 @@ public/                # 프론트엔드 정적 파일 (index.html, app.js, styl
 
 ## 핵심 동작 흐름
 
-1. 클라이언트가 CSV 파일과 `track_mode`(`single`/`dual`)를 `POST /analyze`로 업로드
-2. `handler.py`가 multipart 데이터에서 파일과 트랙 모드 추출
-3. `analyzer.py`가 CSV를 파싱하고 사용자별 이모티콘 할당 및 날짜 수집 (투트랙 모드 시 구약/신약 분리)
-4. `date_parser.py`와 `emoji.py`가 각각 날짜/이모티콘 추출 담당
-5. 결과를 스타일 적용된 XLSX로 변환하고, JSON 응답(xlsx_base64 + preview 데이터)으로 반환
+1. 클라이언트가 대화 파일(CSV/TXT/ZIP)과 `track_mode`(`single`/`dual`)를 `POST /analyze`로 업로드
+2. `handler.py`가 multipart 데이터에서 파일과 트랙 모드 추출, 파일 형식 감지(매직바이트/확장자)
+3. 파일 형식에 따라 파싱: CSV → `parse_csv_rows()`, TXT → `parse_txt()`, ZIP → TXT 추출 후 `parse_txt()`
+4. `analyzer.py`가 `(user, message)` 리스트를 분석하여 사용자별 이모티콘 할당 및 날짜 수집 (투트랙 모드 시 구약/신약 분리)
+5. `date_parser.py`와 `emoji.py`가 각각 날짜/이모티콘 추출 담당
+6. 결과를 스타일 적용된 XLSX로 변환하고, JSON 응답(xlsx_base64 + preview 데이터)으로 반환
 
 ## 분석 규칙 요약
 
