@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>꿀성경 진도표 생성 도구</title>
     <meta property="og:title" content="꿀성경 진도표 생성 도구" />
-    <meta property="og:description" content="카카오톡 대화 CSV → 멤버별 진도표 자동 생성" />
+    <meta property="og:description" content="카카오톡 대화 파일(CSV/TXT/ZIP) → 멤버별 진도표 자동 생성" />
     <meta property="og:image" content="https://honeybiblemanager.onrender.com/og-image.png" />
     <meta property="og:type" content="website" />
     <link rel="icon" href="favicon.svg" type="image/svg+xml" />
@@ -30,7 +30,7 @@
         </div>
         <h1>꿀성경 진도표 생성 도구</h1>
         <p class="subtitle">
-          카카오톡 대화 CSV를 업로드하고 분석을 실행해 멤버별 인증 내역을
+          카카오톡 대화 파일(CSV/TXT/ZIP)을 업로드하고 분석을 실행해 멤버별 인증 내역을
           다운로드하세요.
         </p>
       </header>
@@ -42,14 +42,14 @@
               type="file"
               id="csvFile"
               name="csvFile"
-              accept=".csv,text/csv"
+              accept=".csv,.txt,.zip,text/csv,text/plain,application/zip"
             />
-            <span class="file-icon" aria-hidden="true">CSV</span>
+            <span class="file-icon" aria-hidden="true">FILE</span>
             <span class="file-body">
-              <span class="file-title">대화 CSV 선택</span>
+              <span class="file-title">대화 파일 선택</span>
               <span class="file-meta" id="fileMeta">선택된 파일 없음</span>
             </span>
-            <span class="file-chip">CSV 전용</span>
+            <span class="file-chip">CSV/TXT/ZIP</span>
           </label>
 
           <fieldset class="track-select">
@@ -76,7 +76,7 @@
 
           <div class="status" id="status" data-state="idle" role="status" aria-live="polite">
             <span class="status-dot" aria-hidden="true"></span>
-            <span class="status-text">CSV 업로드를 기다리는 중입니다.</span>
+            <span class="status-text">파일 업로드를 기다리는 중입니다.</span>
             <span class="spinner" id="spinner" aria-hidden="true"></span>
           </div>
         </form>
@@ -84,14 +84,24 @@
 
       <section class="panel note">
         <h2>사용 방법</h2>
-        <ol class="steps">
+        <div class="guide-tabs" role="tablist">
+          <button class="guide-tab is-active" role="tab" aria-selected="true" data-tab="pc">PC</button>
+          <button class="guide-tab" role="tab" aria-selected="false" data-tab="mobile">모바일</button>
+        </div>
+        <ol class="steps" role="tabpanel" data-panel="pc">
           <li>카카오톡 단체 채팅방 설정</li>
           <li>대화 내용 관리</li>
           <li>대화 내용 저장</li>
           <li>텍스트 파일로 저장</li>
-          <li>.csv 파일 업로드</li>
+          <li><code>.csv</code> 파일 업로드</li>
         </ol>
-
+        <ol class="steps" role="tabpanel" data-panel="mobile" hidden>
+          <li>카카오톡 단체 채팅방 설정</li>
+          <li>대화 내용 내보내기</li>
+          <li>모든 메시지 도큐멘트로 저장하기</li>
+          <li>웹에서 대화 파일 선택 &gt; 둘러보기 &gt; 나의 iPhone &gt; 카카오톡</li>
+          <li><code>.zip</code> 파일 업로드</li>
+        </ol>
       </section>
 
       <section class="results" id="results" hidden>

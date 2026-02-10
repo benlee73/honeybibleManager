@@ -119,11 +119,14 @@ const resetDownload = () => {
   }
 };
 
-const isCsvFile = (file) => {
+const VALID_EXTENSIONS = [".csv", ".txt", ".zip"];
+
+const isValidFile = (file) => {
   if (!file || !file.name) {
     return false;
   }
-  return file.name.toLowerCase().endsWith(".csv");
+  const name = file.name.toLowerCase();
+  return VALID_EXTENSIONS.some((ext) => name.endsWith(ext));
 };
 
 const formatBytes = (bytes) => {
@@ -333,14 +336,14 @@ fileInput.addEventListener("change", () => {
   if (!file) {
     analyzeButton.disabled = true;
     fileMeta.textContent = "선택된 파일 없음";
-    setStatus("idle", "CSV 업로드를 기다리는 중입니다.");
+    setStatus("idle", "파일 업로드를 기다리는 중입니다.");
     return;
   }
 
-  if (!isCsvFile(file)) {
+  if (!isValidFile(file)) {
     analyzeButton.disabled = true;
     fileMeta.textContent = `선택됨: ${file.name}`;
-    setStatus("error", ".csv 파일만 업로드할 수 있습니다.");
+    setStatus("error", ".csv, .txt, .zip 파일만 업로드할 수 있습니다.");
     return;
   }
 
@@ -354,19 +357,19 @@ form.addEventListener("submit", async (event) => {
 
   const file = fileInput.files[0];
   if (!file) {
-    setStatus("error", "분석 전에 CSV 파일을 선택하세요.");
+    setStatus("error", "분석 전에 파일을 선택하세요.");
     return;
   }
 
-  if (!isCsvFile(file)) {
-    setStatus("error", "선택한 파일이 CSV가 아닙니다.");
+  if (!isValidFile(file)) {
+    setStatus("error", "지원하지 않는 파일 형식입니다.");
     return;
   }
 
   resetDownload();
   setFormEnabled(false);
   setProgress(0);
-  setStatus("loading", "CSV를 분석하는 중입니다. 잠시만 기다려주세요...");
+  setStatus("loading", "파일을 분석하는 중입니다. 잠시만 기다려주세요...");
 
   setProgress(0);
 
@@ -418,7 +421,7 @@ form.addEventListener("submit", async (event) => {
     const message = error instanceof Error ? error.message : "분석에 실패했습니다.";
     setStatus("error", message);
   } finally {
-    const canAnalyze = Boolean(fileInput.files[0]) && isCsvFile(fileInput.files[0]);
+    const canAnalyze = Boolean(fileInput.files[0]) && isValidFile(fileInput.files[0]);
     fileInput.disabled = false;
     analyzeButton.disabled = !canAnalyze;
   }
@@ -427,3 +430,25 @@ form.addEventListener("submit", async (event) => {
 window.addEventListener("beforeunload", () => {
   clearObjectUrl();
 });
+
+/* 사용 방법 탭 전환 */
+const switchGuideTab = (target) => {
+  const note = document.querySelector(".note");
+  if (!note) return;
+  note.querySelectorAll(".guide-tab").forEach((t) => {
+    const active = t.dataset.tab === target;
+    t.classList.toggle("is-active", active);
+    t.setAttribute("aria-selected", String(active));
+  });
+  note.querySelectorAll("[data-panel]").forEach((panel) => {
+    panel.hidden = panel.dataset.panel !== target;
+  });
+};
+
+document.querySelectorAll(".guide-tab").forEach((tab) => {
+  tab.addEventListener("click", () => switchGuideTab(tab.dataset.tab));
+});
+
+if (/Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent)) {
+  switchGuideTab("mobile");
+}
