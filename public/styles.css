@@ -95,6 +95,7 @@ body {
   display: grid;
   gap: 28px;
   grid-template-columns: repeat(12, minmax(0, 1fr));
+  overflow-x: clip;
 }
 
 .hero {
