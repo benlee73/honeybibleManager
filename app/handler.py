@@ -63,13 +63,16 @@ def _build_drive_filename(leader, saved_date):
         saved_date: "YYYY/MM/DD-HH:MM" 형식 (None이면 기본값 사용)
 
     Returns:
-        str|None: "result_방장_YYYY/MM/DD-HH:MM.xlsx" 또는 None
+        str|None: "꿀성경_방장_YYYYMMDD_HHMM.xlsx" 또는 None
     """
     if not leader and not saved_date:
         return None
     name_part = leader or "결과"
-    date_part = f"_{saved_date}" if saved_date else ""
-    return f"result_{name_part}{date_part}.xlsx"
+    date_part = ""
+    if saved_date:
+        # "YYYY/MM/DD-HH:MM" → "YYYYMMDD_HHMM"
+        date_part = "_" + saved_date.replace("/", "").replace("-", "_").replace(":", "")
+    return f"꿀성경_{name_part}{date_part}.xlsx"
 
 
 def _extract_csv_meta(filename):

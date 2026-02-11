@@ -343,15 +343,15 @@ class TestExtractLeader:
 class TestBuildDriveFilename:
     def test_방장_및_날짜_모두_있음(self):
         result = _build_drive_filename("김방장", "2026/02/09-10:50")
-        assert result == "result_김방장_2026/02/09-10:50.xlsx"
+        assert result == "꿀성경_김방장_20260209_1050.xlsx"
 
     def test_방장만_있음(self):
         result = _build_drive_filename("김방장", None)
-        assert result == "result_김방장.xlsx"
+        assert result == "꿀성경_김방장.xlsx"
 
     def test_날짜만_있음(self):
         result = _build_drive_filename(None, "2026/02/09-10:50")
-        assert result == "result_결과_2026/02/09-10:50.xlsx"
+        assert result == "꿀성경_결과_20260209_1050.xlsx"
 
     def test_둘_다_없음__None_반환(self):
         result = _build_drive_filename(None, None)
