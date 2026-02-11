@@ -328,28 +328,100 @@ const showResults = (headers, rows, trackMode) => {
   resultsSection.scrollIntoView({ behavior: "smooth" });
 };
 
-const setProgress = (percent) => {
+const PROGRESS_STAGES = [
+  { label: "메시지 분석 중", to: 50,  duration: 1200 },
+  { label: "결과 생성 중",   to: 95,  duration: 8000 },
+];
+
+const setProgress = (percent, label) => {
   if (!progressBar) return;
   progressBar.hidden = false;
   progressFill.style.width = `${percent}%`;
-  progressText.textContent = `${percent}%`;
+  progressText.textContent = label || `${percent}%`;
 };
 
-const animateProgress = (from, to, duration, callback) => {
-  const startTime = performance.now();
-  const step = (now) => {
-    const elapsed = now - startTime;
-    const progress = Math.min(elapsed / duration, 1);
-    const eased = 1 - Math.pow(1 - progress, 3);
-    const current = Math.round(from + (to - from) * eased);
-    setProgress(current);
-    if (progress < 1) {
-      requestAnimationFrame(step);
-    } else if (callback) {
-      callback();
+const MIN_PROGRESS_MS = 1500;
+
+const runStagedProgress = () => {
+  let cancelled = false;
+  let currentRaf = 0;
+  let currentPercent = 0;
+  const globalStart = performance.now();
+
+  const animateStage = (from, to, duration, label) =>
+    new Promise((resolve) => {
+      const startTime = performance.now();
+      const step = (now) => {
+        if (cancelled) { resolve(); return; }
+        const elapsed = now - startTime;
+        const progress = Math.min(elapsed / duration, 1);
+        const eased = 1 - Math.pow(1 - progress, 3);
+        currentPercent = Math.round(from + (to - from) * eased);
+        setProgress(currentPercent, label);
+        if (progress < 1) {
+          currentRaf = requestAnimationFrame(step);
+        } else {
+          resolve();
+        }
+      };
+      currentRaf = requestAnimationFrame(step);
+    });
+
+  const run = async () => {
+    let from = 0;
+    for (const stage of PROGRESS_STAGES) {
+      if (cancelled) break;
+      await animateStage(from, stage.to, stage.duration, stage.label);
+      from = stage.to;
     }
   };
-  requestAnimationFrame(step);
+
+  run();
+
+  return {
+    finish: () => {
+      cancelled = true;
+      cancelAnimationFrame(currentRaf);
+      const elapsed = performance.now() - globalStart;
+      const remaining = Math.max(0, MIN_PROGRESS_MS - elapsed);
+
+      const pending = PROGRESS_STAGES
+        .filter((s) => s.to > currentPercent)
+        .map((s) => ({ to: s.to, label: s.label }));
+      pending.push({ to: 100, label: "완료!" });
+
+      if (remaining === 0) {
+        setProgress(100, "완료!");
+        return Promise.resolve();
+      }
+
+      const timePerStage = remaining / pending.length;
+
+      return new Promise((resolve) => {
+        let idx = 0;
+        let from = currentPercent;
+        const runNext = () => {
+          if (idx >= pending.length) { resolve(); return; }
+          const stage = pending[idx];
+          const start = performance.now();
+          const step = (now) => {
+            const t = Math.min((now - start) / timePerStage, 1);
+            const eased = 1 - Math.pow(1 - t, 3);
+            setProgress(Math.round(from + (stage.to - from) * eased), stage.label);
+            if (t < 1) {
+              requestAnimationFrame(step);
+            } else {
+              from = stage.to;
+              idx += 1;
+              runNext();
+            }
+          };
+          requestAnimationFrame(step);
+        };
+        runNext();
+      });
+    },
+  };
 };
 
 fileInput.addEventListener("change", () => {
@@ -396,7 +468,7 @@ form.addEventListener("submit", async (event) => {
   setProgress(0);
   setStatus("loading", "파일을 분석하는 중입니다. 잠시만 기다려주세요...");
 
-  setProgress(0);
+  const staged = runStagedProgress();
 
   try {
     const formData = new FormData();
@@ -405,21 +477,17 @@ form.addEventListener("submit", async (event) => {
     formData.append("track_mode", trackMode);
     formData.append("theme", localStorage.getItem("theme") || "honey");
 
-    const fetchPromise = fetch(API_ENDPOINT, {
+    const response = await fetch(API_ENDPOINT, {
       method: "POST",
       body: formData,
     });
 
-    const progressPromise = new Promise((resolve) => {
-      animateProgress(0, 100, 1000, resolve);
-    });
-
-    const [response] = await Promise.all([fetchPromise, progressPromise]);
-
     if (!response.ok) {
+      await staged.finish();
       throw new Error(await readErrorMessage(response));
     }
 
+    await staged.finish();
     const data = await response.json();
     const xlsxBinary = atob(data.xlsx_base64);
     const xlsxArray = new Uint8Array(xlsxBinary.length);
@@ -459,6 +527,7 @@ form.addEventListener("submit", async (event) => {
       driveButton.disabled = false;
     }
   } catch (error) {
+    await staged.finish();
     const message = error instanceof Error ? error.message : "분석에 실패했습니다.";
     setStatus("error", message);
   } finally {
