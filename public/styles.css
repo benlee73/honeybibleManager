@@ -907,6 +907,10 @@ body[data-theme="bw"] .file-input:focus-within {
   box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.15);
 }
 
+body[data-theme="bw"] .progress-text {
+  mix-blend-mode: difference;
+}
+
 body[data-theme="bw"] .guide-toggle-indicator {
   background: rgba(255, 255, 255, 0.12);
 }
@@ -1019,6 +1023,12 @@ body[data-theme="neon"] .file-input:hover {
 body[data-theme="neon"] .file-input:focus-within {
   border-color: rgba(0, 229, 255, 0.6);
   box-shadow: 0 0 0 3px rgba(0, 229, 255, 0.2);
+}
+
+body[data-theme="neon"] .progress-text {
+  mix-blend-mode: normal;
+  color: #fff;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
 }
 
 body[data-theme="neon"] .guide-toggle-indicator {
