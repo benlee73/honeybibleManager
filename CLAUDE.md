@@ -4,31 +4,25 @@
 
 카카오톡 대화 파일(CSV/TXT/ZIP)을 업로드하면 멤버별 이모티콘/날짜를 분석하여 결과 XLSX 및 PNG 이미지로 반환하는 웹 서버. PC 카카오톡(CSV)과 모바일 카카오톡(TXT/ZIP) 내보내기를 모두 지원한다. "이미지로 보기" 기능으로 카카오톡 인앱 브라우저에서 결과를 사진으로 저장할 수 있다.
 
-## 기술 스택
-
-- Python 3.12+ / openpyxl (XLSX 생성) / Pillow (PNG 이미지 생성) / google-api-python-client + google-auth + google-auth-oauthlib (Google Drive OAuth 업로드)
-- 의존성 관리: Poetry
-- 테스트: pytest (dev 의존성)
-
 ## 프로젝트 구조
 
 ```
-server.py              # 진입점. HTTPServer 실행 (--host, --port)
+server.py              # 진입점 (HTTPServer)
 app/
-  handler.py           # HoneyBibleHandler: HTTP 요청 처리 (GET 정적파일, POST /analyze, POST /upload-drive), 파일 형식 감지(CSV/TXT/ZIP)
-  analyzer.py          # analyze_chat(), parse_csv_rows(), build_output_csv(), build_preview_data(), build_dual_preview_data(), build_output_xlsx(), extract_tracks(): 분석/결과 생성/트랙 감지
-  image_builder.py     # build_output_image(): 분석 결과를 PNG 이미지로 생성 (통계 카드 + 진도표 테이블, 4종 테마 지원, 2x Retina 대응)
-  txt_parser.py        # parse_txt(): 카카오톡 모바일 TXT 내보내기 파싱 (멀티라인, 시스템 메시지 스킵)
-  schedule.py          # BIBLE_DATES, NT_DATES, detect_schedule(): 진도표 날짜 생성 및 키워드 기반 진도표 선택
-  date_parser.py       # parse_dates(): 메시지에서 날짜 파싱 (범위~/-,  쉼표, M/D 형식)
-  emoji.py             # extract_trailing_emoji(), normalize_emoji(): 이모티콘 추출/정규화
-  drive_uploader.py    # is_drive_configured(), upload_to_drive(): Google Drive 업로드 (OAuth refresh token 방식)
-  logger.py            # setup_logging(), get_logger(): 콘솔+파일(server.log) 로깅 설정
-  fonts/               # Jua, 나눔고딕, NotoEmoji TTF 번들 (OFL 라이선스, 이미지 생성용 한글/이모지 폰트)
-tests/                 # 각 app 모듈에 대응하는 테스트 파일
+  handler.py           # HTTP 요청 처리, 파일 형식 감지
+  analyzer.py          # 채팅 분석, 결과 생성 (CSV/XLSX/preview)
+  image_builder.py     # 결과 PNG 이미지 생성 (4종 테마)
+  txt_parser.py        # 모바일 TXT 내보내기 파싱
+  schedule.py          # 진도표 날짜 생성 및 선택
+  date_parser.py       # 메시지 날짜 파싱
+  emoji.py             # 이모티콘 추출/정규화
+  drive_uploader.py    # Google Drive 업로드
+  logger.py            # 로깅 설정
+  fonts/               # 한글/이모지 폰트 번들
+tests/                 # 테스트
 scripts/
-  get_google_token.py  # 1회성 OAuth refresh token 발급 스크립트 (poetry run python scripts/get_google_token.py)
-public/                # 프론트엔드 정적 파일 (index.html, app.js, styles.css)
+  get_google_token.py  # OAuth refresh token 발급
+public/                # 프론트엔드 (index.html, app.js, styles.css)
 ```
 
 ## 핵심 동작 흐름
@@ -64,4 +58,6 @@ public/                # 프론트엔드 정적 파일 (index.html, app.js, styl
 - 기능을 추가하거나 수정할 때 관련 테스트 코드도 반드시 작성하거나 수정한다.
 - 기능 추가/수정 후 모든 테스트(`poetry run python -m pytest tests/ -v`)가 통과하면 커밋한다.
 - 테스트 코드, Git 커밋 메시지 등은 모두 한글로 작성한다.
-- 프로젝트 구조, 모듈, 기술 스택 등이 변경되면 CLAUDE.md도 함께 업데이트한다.
+- 복잡한 작업은 항상 Plan Mode로 시작한다.
+- 병렬 작업을 최대한 활용한다.
+- 프로젝트 구조나 핵심 규칙이 변경되면 CLAUDE.md도 함께 업데이트한다.
