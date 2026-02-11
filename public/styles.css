@@ -423,6 +423,18 @@ button,
   pointer-events: none;
 }
 
+.icon-drive {
+  width: auto;
+  height: 0.85em;
+  vertical-align: -0.15em;
+}
+
+body[data-theme="bw"] .icon-drive path,
+body[data-theme="brew"] .icon-drive path,
+body[data-theme="neon"] .icon-drive path {
+  fill: currentColor;
+}
+
 .download-link {
   background: transparent;
   color: var(--ink-2);
