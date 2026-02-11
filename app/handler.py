@@ -34,19 +34,40 @@ _CSV_FILENAME_RE = re.compile(
 )
 
 
-def _build_drive_filename(room_name, saved_date):
-    """방 이름과 저장 날짜로 Drive 업로드용 파일명을 생성한다.
+_LEADER_KEYWORD = "꿀성경 진행 방식 안내"
+
+
+def _clean_leader_name(name):
+    """방장 이름에서 영어·공백을 제거하고, 3글자 한글이면 성을 뺀다."""
+    cleaned = re.sub(r"[A-Za-z\s]", "", name)
+    if not cleaned:
+        return name
+    if len(cleaned) == 3 and all("\uAC00" <= ch <= "\uD7A3" for ch in cleaned):
+        cleaned = cleaned[1:]
+    return cleaned
+
+
+def _extract_leader(rows):
+    """rows에서 방장(안내 메시지 발신자) 이름을 추출한다."""
+    for user, message in rows:
+        if _LEADER_KEYWORD in message:
+            return _clean_leader_name(user)
+    return None
+
+
+def _build_drive_filename(leader, saved_date):
+    """방장 이름과 저장 날짜로 Drive 업로드용 파일명을 생성한다.
 
     Args:
-        room_name: 카톡방 이름 (None이면 기본값 사용)
+        leader: 방장 이름 (None이면 기본값 사용)
         saved_date: "YYYY/MM/DD-HH:MM" 형식 (None이면 기본값 사용)
 
     Returns:
-        str|None: "result_방이름_YYYY/MM/DD-HH:MM.xlsx" 또는 None
+        str|None: "result_방장_YYYY/MM/DD-HH:MM.xlsx" 또는 None
     """
-    if not room_name and not saved_date:
+    if not leader and not saved_date:
         return None
-    name_part = room_name or "결과"
+    name_part = leader or "결과"
     date_part = f"_{saved_date}" if saved_date else ""
     return f"result_{name_part}{date_part}.xlsx"
 
@@ -392,7 +413,8 @@ class HoneyBibleHandler(BaseHTTPRequestHandler):
         headers, rows = build_preview_data(users, track_mode=track_mode)
         logger.info("분석 완료: %d명 처리", len(users))
 
-        drive_filename = _build_drive_filename(room_name, saved_date)
+        leader = _extract_leader(rows)
+        drive_filename = _build_drive_filename(leader, saved_date)
 
         response_payload = {
             "xlsx_base64": base64.b64encode(xlsx_bytes).decode("ascii"),

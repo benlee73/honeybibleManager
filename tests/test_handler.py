@@ -14,8 +14,10 @@ from app.handler import (
     HoneyBibleHandler,
     PUBLIC_DIR,
     _build_drive_filename,
+    _clean_leader_name,
     _detect_file_format,
     _extract_csv_meta,
+    _extract_leader,
     _extract_txt_from_zip,
     extract_multipart_field,
     extract_multipart_file,
@@ -283,14 +285,69 @@ class TestExtractCsvMeta:
         assert date is None
 
 
-class TestBuildDriveFilename:
-    def test_방이름_및_날짜_모두_있음(self):
-        result = _build_drive_filename("꿀성경 - 교육국", "2026/02/09-10:50")
-        assert result == "result_꿀성경 - 교육국_2026/02/09-10:50.xlsx"
+class TestCleanLeaderName:
+    def test_3글자_한글__성_제거(self):
+        assert _clean_leader_name("홍길동") == "길동"
 
-    def test_방이름만_있음(self):
-        result = _build_drive_filename("테스트방", None)
-        assert result == "result_테스트방.xlsx"
+    def test_영어_제거(self):
+        assert _clean_leader_name("홍길동ABC") == "길동"
+
+    def test_공백_제거(self):
+        assert _clean_leader_name("홍 길 동") == "길동"
+
+    def test_2글자_한글__그대로(self):
+        assert _clean_leader_name("길동") == "길동"
+
+    def test_4글자_한글__그대로(self):
+        assert _clean_leader_name("남궁길동") == "남궁길동"
+
+    def test_영어와_공백_복합_제거(self):
+        assert _clean_leader_name("Kim 길동") == "길동"
+
+    def test_영어만__원본_반환(self):
+        assert _clean_leader_name("John") == "John"
+
+    def test_한글_영어_혼합_3글자_아님__성_유지(self):
+        assert _clean_leader_name("길동A") == "길동"
+
+    def test_숫자_포함__숫자_유지(self):
+        assert _clean_leader_name("홍길동1") == "홍길동1"
+
+
+class TestExtractLeader:
+    def test_키워드_포함_메시지__후처리된_방장_반환(self):
+        rows = [
+            ("홍길동", "안녕하세요"),
+            ("김방장", "꿀성경 진행 방식 안내입니다"),
+            ("이참여", "감사합니다"),
+        ]
+        assert _extract_leader(rows) == "방장"
+
+    def test_키워드_없음__None_반환(self):
+        rows = [
+            ("홍길동", "안녕하세요"),
+            ("이참여", "감사합니다"),
+        ]
+        assert _extract_leader(rows) is None
+
+    def test_빈_rows__None_반환(self):
+        assert _extract_leader([]) is None
+
+    def test_영어_포함_이름__영어_제거_후_반환(self):
+        rows = [
+            ("Kim 길동", "꿀성경 진행 방식 안내"),
+        ]
+        assert _extract_leader(rows) == "길동"
+
+
+class TestBuildDriveFilename:
+    def test_방장_및_날짜_모두_있음(self):
+        result = _build_drive_filename("김방장", "2026/02/09-10:50")
+        assert result == "result_김방장_2026/02/09-10:50.xlsx"
+
+    def test_방장만_있음(self):
+        result = _build_drive_filename("김방장", None)
+        assert result == "result_김방장.xlsx"
 
     def test_날짜만_있음(self):
         result = _build_drive_filename(None, "2026/02/09-10:50")
