@@ -407,13 +407,13 @@ class HoneyBibleHandler(BaseHTTPRequestHandler):
 
         theme = extract_multipart_field(payload, content_type, "theme") or "honey"
 
+        leader = _extract_leader(rows)
+
         users = analyze_chat(rows=rows, track_mode=track_mode)
         xlsx_bytes = build_output_xlsx(users, track_mode=track_mode)
         image_bytes = build_output_image(users, track_mode=track_mode, theme=theme)
         headers, rows = build_preview_data(users, track_mode=track_mode)
         logger.info("분석 완료: %d명 처리", len(users))
-
-        leader = _extract_leader(rows)
         drive_filename = _build_drive_filename(leader, saved_date)
 
         response_payload = {
