@@ -356,3 +356,283 @@ class TestBuildDriveFilename:
     def test_둘_다_없음__None_반환(self):
         result = _build_drive_filename(None, None)
         assert result is None
+
+
+def _make_analyze_payload(filename, file_content, fields=None, boundary="testboundary"):
+    """POST /analyze용 multipart 페이로드를 생성한다."""
+    body = (
+        f"--{boundary}\r\n"
+        f'Content-Disposition: form-data; name="file"; filename="{filename}"\r\n'
+        f"Content-Type: application/octet-stream\r\n"
+        f"\r\n"
+    ).encode("utf-8")
+    body += file_content
+    for name, value in (fields or {}).items():
+        body += (
+            f"\r\n--{boundary}\r\n"
+            f'Content-Disposition: form-data; name="{name}"\r\n'
+            f"\r\n"
+            f"{value}"
+        ).encode("utf-8")
+    body += f"\r\n--{boundary}--\r\n".encode("utf-8")
+    return body, f"multipart/form-data; boundary={boundary}"
+
+
+# CSV용 최소 데이터
+_CSV_DATA = (
+    "Date,User,Message\n"
+    "2026-02-10,홍길동,꿀성경 진행 방식 안내\n"
+    "2026-02-10,김철수,1/6 ❤️\n"
+).encode("utf-8")
+
+# TXT용 (카카오톡 모바일 내보내기 형식)
+_TXT_DATA = (
+    "홍길동 님과 카카오톡 대화\n"
+    "저장한 날짜 : 2026년 2월 10일 오전 10:30\n"
+    "\n"
+    "2026년 2월 10일 월요일\n"
+    "홍길동 : 꿀성경 진행 방식 안내\n"
+    "김철수 : 1/6 ❤️\n"
+).encode("utf-8")
+
+
+class TestAnalyzeEndpoint:
+    def test_CSV_파일_분석__정상_응답(self, test_server):
+        body, content_type = _make_analyze_payload("chat.csv", _CSV_DATA)
+        req = Request(
+            f"{test_server}/analyze",
+            data=body,
+            headers={"Content-Type": content_type},
+            method="POST",
+        )
+        resp = urlopen(req)
+        assert resp.status == 200
+        data = json.loads(resp.read())
+        assert "xlsx_base64" in data
+        assert "image_base64" in data
+        assert "preview" in data
+        assert "filename" in data
+        assert "headers" in data["preview"]
+        assert "rows" in data["preview"]
+
+    def test_CSV_파일_분석__drive_filename_포함(self, test_server):
+        body, content_type = _make_analyze_payload(
+            "KakaoTalk_Chat_꿀성경방_2026-02-10-10-30.csv",
+            _CSV_DATA,
+        )
+        req = Request(
+            f"{test_server}/analyze",
+            data=body,
+            headers={"Content-Type": content_type},
+            method="POST",
+        )
+        resp = urlopen(req)
+        assert resp.status == 200
+        data = json.loads(resp.read())
+        assert "drive_filename" in data
+        # 방장 '홍길동' → 후처리 → '길동'
+        assert "길동" in data["drive_filename"]
+
+    def test_TXT_파일_분석__정상_응답(self, test_server):
+        body, content_type = _make_analyze_payload("chat.txt", _TXT_DATA)
+        req = Request(
+            f"{test_server}/analyze",
+            data=body,
+            headers={"Content-Type": content_type},
+            method="POST",
+        )
+        resp = urlopen(req)
+        assert resp.status == 200
+        data = json.loads(resp.read())
+        assert "xlsx_base64" in data
+        assert "image_base64" in data
+        assert "preview" in data
+
+    def test_ZIP_파일_분석__정상_응답(self, test_server):
+        buf = io.BytesIO()
+        with zipfile.ZipFile(buf, "w") as zf:
+            zf.writestr("chat.txt", _TXT_DATA.decode("utf-8"))
+        zip_bytes = buf.getvalue()
+
+        body, content_type = _make_analyze_payload("chat.zip", zip_bytes)
+        req = Request(
+            f"{test_server}/analyze",
+            data=body,
+            headers={"Content-Type": content_type},
+            method="POST",
+        )
+        resp = urlopen(req)
+        assert resp.status == 200
+        data = json.loads(resp.read())
+        assert "xlsx_base64" in data
+        assert "image_base64" in data
+        assert "preview" in data
+
+    def test_track_mode_dual__정상_응답(self, test_server):
+        body, content_type = _make_analyze_payload(
+            "chat.csv", _CSV_DATA, fields={"track_mode": "dual"},
+        )
+        req = Request(
+            f"{test_server}/analyze",
+            data=body,
+            headers={"Content-Type": content_type},
+            method="POST",
+        )
+        resp = urlopen(req)
+        assert resp.status == 200
+        data = json.loads(resp.read())
+        assert "xlsx_base64" in data
+        assert "preview" in data
+
+    def test_빈_파일__400_에러(self, test_server):
+        body, content_type = _make_analyze_payload("empty.csv", b"")
+        req = Request(
+            f"{test_server}/analyze",
+            data=body,
+            headers={"Content-Type": content_type},
+            method="POST",
+        )
+        try:
+            urlopen(req)
+            assert False, "400 에러가 발생해야 합니다"
+        except Exception as exc:
+            assert "400" in str(exc)
+
+
+_SAMPLES_DIR = os.path.join(
+    os.path.dirname(os.path.dirname(__file__)), "resources", "samples",
+)
+
+_SAMPLE_CSV_PART1 = os.path.join(
+    _SAMPLES_DIR,
+    "KakaoTalk_Chat_\U0001f36f 2026 성경일독 part1_2026-02-11-10-28-57.csv",
+)
+_SAMPLE_CSV_EDUC = os.path.join(
+    _SAMPLES_DIR,
+    "KakaoTalk_Chat_꿀성경 - 교육국_2026-02-11-10-29-14.csv",
+)
+_SAMPLE_ZIP = os.path.join(
+    _SAMPLES_DIR,
+    "Kakaotalk_Chat_\U0001f36f 2026 성경일독 part1_20260210_121623.zip",
+)
+
+_samples_exist = all(
+    os.path.isfile(p) for p in (_SAMPLE_CSV_PART1, _SAMPLE_CSV_EDUC, _SAMPLE_ZIP)
+)
+
+
+@pytest.mark.skipif(not _samples_exist, reason="resources/samples 파일 없음")
+class TestAnalyzeEndpointWithSamples:
+    """실제 카카오톡 내보내기 샘플 파일을 사용한 POST /analyze 통합 테스트."""
+
+    def test_성경일독_CSV__정상_분석(self, test_server):
+        with open(_SAMPLE_CSV_PART1, "rb") as f:
+            file_bytes = f.read()
+        filename = os.path.basename(_SAMPLE_CSV_PART1)
+        body, content_type = _make_analyze_payload(filename, file_bytes)
+        req = Request(
+            f"{test_server}/analyze",
+            data=body,
+            headers={"Content-Type": content_type},
+            method="POST",
+        )
+        resp = urlopen(req)
+        assert resp.status == 200
+        data = json.loads(resp.read())
+        assert "xlsx_base64" in data
+        assert "image_base64" in data
+        preview = data["preview"]
+        assert len(preview["headers"]) >= 3  # 이모티콘, 이름, 날짜 1개 이상
+        assert len(preview["rows"]) >= 2  # 최소 2명 이상
+
+    def test_성경일독_CSV__drive_filename_포함(self, test_server):
+        with open(_SAMPLE_CSV_PART1, "rb") as f:
+            file_bytes = f.read()
+        filename = os.path.basename(_SAMPLE_CSV_PART1)
+        body, content_type = _make_analyze_payload(filename, file_bytes)
+        req = Request(
+            f"{test_server}/analyze",
+            data=body,
+            headers={"Content-Type": content_type},
+            method="POST",
+        )
+        resp = urlopen(req)
+        data = json.loads(resp.read())
+        # 방장 키워드("꿀성경 진행 방식 안내") 포함 → drive_filename 존재
+        assert "drive_filename" in data
+        assert data["drive_filename"].endswith(".xlsx")
+
+    def test_교육국_CSV__정상_분석(self, test_server):
+        with open(_SAMPLE_CSV_EDUC, "rb") as f:
+            file_bytes = f.read()
+        filename = os.path.basename(_SAMPLE_CSV_EDUC)
+        body, content_type = _make_analyze_payload(filename, file_bytes)
+        req = Request(
+            f"{test_server}/analyze",
+            data=body,
+            headers={"Content-Type": content_type},
+            method="POST",
+        )
+        resp = urlopen(req)
+        assert resp.status == 200
+        data = json.loads(resp.read())
+        assert "xlsx_base64" in data
+        assert "image_base64" in data
+        assert len(data["preview"]["rows"]) >= 1
+
+    def test_ZIP_파일__정상_분석(self, test_server):
+        with open(_SAMPLE_ZIP, "rb") as f:
+            file_bytes = f.read()
+        filename = os.path.basename(_SAMPLE_ZIP)
+        body, content_type = _make_analyze_payload(filename, file_bytes)
+        req = Request(
+            f"{test_server}/analyze",
+            data=body,
+            headers={"Content-Type": content_type},
+            method="POST",
+        )
+        resp = urlopen(req)
+        assert resp.status == 200
+        data = json.loads(resp.read())
+        assert "xlsx_base64" in data
+        assert "image_base64" in data
+        assert len(data["preview"]["rows"]) >= 2
+
+    def test_성경일독_CSV_dual_모드__정상_분석(self, test_server):
+        with open(_SAMPLE_CSV_PART1, "rb") as f:
+            file_bytes = f.read()
+        filename = os.path.basename(_SAMPLE_CSV_PART1)
+        body, content_type = _make_analyze_payload(
+            filename, file_bytes, fields={"track_mode": "dual"},
+        )
+        req = Request(
+            f"{test_server}/analyze",
+            data=body,
+            headers={"Content-Type": content_type},
+            method="POST",
+        )
+        resp = urlopen(req)
+        assert resp.status == 200
+        data = json.loads(resp.read())
+        assert "xlsx_base64" in data
+        assert "image_base64" in data
+        assert "preview" in data
+
+    def test_성경일독_CSV__xlsx_디코딩_가능(self, test_server):
+        with open(_SAMPLE_CSV_PART1, "rb") as f:
+            file_bytes = f.read()
+        filename = os.path.basename(_SAMPLE_CSV_PART1)
+        body, content_type = _make_analyze_payload(filename, file_bytes)
+        req = Request(
+            f"{test_server}/analyze",
+            data=body,
+            headers={"Content-Type": content_type},
+            method="POST",
+        )
+        resp = urlopen(req)
+        data = json.loads(resp.read())
+        # base64 디코딩이 정상적으로 되는지 확인
+        xlsx_bytes = base64.b64decode(data["xlsx_base64"])
+        assert len(xlsx_bytes) > 0
+        # XLSX 매직바이트 (PK ZIP)
+        assert xlsx_bytes[:2] == b"PK"
