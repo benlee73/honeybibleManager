@@ -11,6 +11,9 @@ from urllib.request import Request, urlopen
 import pytest
 
 from app.handler import (
+    MAX_DECOMPRESSED_BYTES,
+    MAX_DRIVE_PAYLOAD_BYTES,
+    MAX_UPLOAD_BYTES,
     HoneyBibleHandler,
     PUBLIC_DIR,
     _build_drive_filename,
@@ -636,3 +639,53 @@ class TestAnalyzeEndpointWithSamples:
         assert len(xlsx_bytes) > 0
         # XLSX 매직바이트 (PK ZIP)
         assert xlsx_bytes[:2] == b"PK"
+
+
+class TestSizeLimit:
+    def test_analyze_크기_초과_413(self, test_server):
+        """MAX_UPLOAD_BYTES보다 큰 Content-Length로 요청 시 413 응답."""
+        body = b"x" * 1024  # 실제 본문은 작게
+        req = Request(
+            f"{test_server}/analyze",
+            data=body,
+            headers={
+                "Content-Type": "multipart/form-data; boundary=testboundary",
+                "Content-Length": str(MAX_UPLOAD_BYTES + 1),
+            },
+            method="POST",
+        )
+        try:
+            urlopen(req)
+            assert False, "413 에러가 발생해야 합니다"
+        except Exception as exc:
+            assert "413" in str(exc)
+
+    def test_drive_크기_초과_413(self, test_server):
+        """MAX_DRIVE_PAYLOAD_BYTES보다 큰 Content-Length로 요청 시 413 응답."""
+        body = b"{}"
+        req = Request(
+            f"{test_server}/upload-drive",
+            data=body,
+            headers={
+                "Content-Type": "application/json",
+                "Content-Length": str(MAX_DRIVE_PAYLOAD_BYTES + 1),
+            },
+            method="POST",
+        )
+        try:
+            urlopen(req)
+            assert False, "413 에러가 발생해야 합니다"
+        except Exception as exc:
+            assert "413" in str(exc)
+
+    def test_zip_압축해제_크기_초과(self):
+        """압축해제 크기가 MAX_DECOMPRESSED_BYTES를 초과하는 ZIP 파일 처리."""
+        buf = io.BytesIO()
+        with zipfile.ZipFile(buf, "w") as zf:
+            # 실제 file_size가 MAX_DECOMPRESSED_BYTES보다 큰 TXT 파일 생성
+            zf.writestr("chat.txt", "x" * (MAX_DECOMPRESSED_BYTES + 1))
+        zip_bytes = buf.getvalue()
+
+        data, error = _extract_txt_from_zip(zip_bytes)
+        assert data is None
+        assert "너무 큽니다" in error

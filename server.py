@@ -1,6 +1,6 @@
 import argparse
 import os
-from http.server import HTTPServer
+from http.server import ThreadingHTTPServer
 
 from app.handler import HoneyBibleHandler
 from app.logger import get_logger, setup_logging
@@ -33,7 +33,7 @@ def main():
     parser.add_argument("--port", type=int, default=8000)
     args = parser.parse_args()
 
-    server = HTTPServer((args.host, args.port), HoneyBibleHandler)
+    server = ThreadingHTTPServer((args.host, args.port), HoneyBibleHandler)
     logger.info("서버 시작: http://%s:%s", args.host, args.port)
     try:
         server.serve_forever()

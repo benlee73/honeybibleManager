@@ -135,7 +135,7 @@ const resetDownload = () => {
   if (driveButton) {
     driveButton.classList.add("is-disabled");
     driveButton.disabled = true;
-    driveButton.innerHTML = '구글 드라이브로 업로드';
+    driveButton.textContent = '구글 드라이브로 업로드';
   }
   if (progressBar) {
     progressBar.hidden = true;
@@ -553,8 +553,8 @@ if (driveButton) {
   driveButton.addEventListener("click", async () => {
     if (!currentXlsxBase64) return;
 
-    const originalHTML = driveButton.innerHTML;
-    driveButton.innerHTML = '업로드 중...';
+    const originalText = driveButton.textContent;
+    driveButton.textContent = '업로드 중...';
     driveButton.disabled = true;
 
     try {
@@ -570,23 +570,23 @@ if (driveButton) {
       const result = await response.json();
 
       if (result.success) {
-        driveButton.innerHTML = '업로드 완료!';
+        driveButton.textContent = '업로드 완료!';
         setTimeout(() => {
-          driveButton.innerHTML = originalHTML;
+          driveButton.textContent = originalText;
           driveButton.disabled = false;
         }, 3000);
       } else {
         const msg = result.message || "업로드에 실패했습니다.";
-        driveButton.innerHTML = `실패: ${msg}`;
+        driveButton.textContent = `실패: ${msg}`;
         setTimeout(() => {
-          driveButton.innerHTML = originalHTML;
+          driveButton.textContent = originalText;
           driveButton.disabled = false;
         }, 4000);
       }
     } catch (error) {
-      driveButton.innerHTML = '업로드 오류 발생';
+      driveButton.textContent = '업로드 오류 발생';
       setTimeout(() => {
-        driveButton.innerHTML = originalHTML;
+        driveButton.textContent = originalText;
         driveButton.disabled = false;
       }, 4000);
     }

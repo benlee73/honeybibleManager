@@ -24,6 +24,10 @@ from app.txt_parser import extract_chat_meta, parse_txt
 
 logger = get_logger("handler")
 
+MAX_UPLOAD_BYTES = 50 * 1024 * 1024        # 50 MB (multipart 전체)
+MAX_DRIVE_PAYLOAD_BYTES = 50 * 1024 * 1024  # 50 MB (Drive JSON)
+MAX_DECOMPRESSED_BYTES = 50 * 1024 * 1024   # 50 MB (ZIP 압축해제)
+
 PUBLIC_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "public")
 
 _ZIP_MAGIC = b"PK\x03\x04"
@@ -107,13 +111,16 @@ def _detect_file_format(filename, file_bytes):
 def _extract_txt_from_zip(file_bytes):
     """ZIP 파일에서 첫 번째 TXT 파일을 추출하여 바이트로 반환한다."""
     try:
-        zf = zipfile.ZipFile(BytesIO(file_bytes))
+        with zipfile.ZipFile(BytesIO(file_bytes)) as zf:
+            txt_names = [n for n in zf.namelist() if n.lower().endswith(".txt")]
+            if not txt_names:
+                return None, "ZIP 파일 안에 TXT 파일이 없습니다."
+            info = zf.getinfo(txt_names[0])
+            if info.file_size > MAX_DECOMPRESSED_BYTES:
+                return None, f"TXT 파일이 너무 큽니다. (최대 {MAX_DECOMPRESSED_BYTES // (1024 * 1024)}MB)"
+            return zf.read(txt_names[0]), None
     except zipfile.BadZipFile:
         return None, "올바른 ZIP 파일이 아닙니다."
-    txt_names = [n for n in zf.namelist() if n.lower().endswith(".txt")]
-    if not txt_names:
-        return None, "ZIP 파일 안에 TXT 파일이 없습니다."
-    return zf.read(txt_names[0]), None
 
 
 def _parse_multipart(payload, content_type):
@@ -301,6 +308,10 @@ class HoneyBibleHandler(BaseHTTPRequestHandler):
             self._send_json(400, {"message": "Invalid Content-Length header"})
             return
 
+        if length > MAX_DRIVE_PAYLOAD_BYTES:
+            self._send_json(413, {"message": f"요청이 너무 큽니다. (최대 {MAX_DRIVE_PAYLOAD_BYTES // (1024 * 1024)}MB)"})
+            return
+
         payload = self.rfile.read(length)
 
         try:
@@ -365,67 +376,76 @@ class HoneyBibleHandler(BaseHTTPRequestHandler):
             self._send_json(400, {"message": "CSV file is empty"})
             return
 
+        if length > MAX_UPLOAD_BYTES:
+            self._send_json(413, {"message": f"파일이 너무 큽니다. (최대 {MAX_UPLOAD_BYTES // (1024 * 1024)}MB)"})
+            return
+
         payload = self.rfile.read(length)
-        filename, file_bytes, error_message = extract_multipart_file(
-            payload,
-            content_type,
-        )
-        if error_message:
-            self._send_json(400, {"message": error_message})
-            return
 
-        if not file_bytes:
-            self._send_json(400, {"message": "파일이 비어 있습니다."})
-            return
-
-        track_mode = extract_multipart_field(payload, content_type, "track_mode")
-        if track_mode not in ("single", "dual"):
-            track_mode = "single"
-
-        file_format = _detect_file_format(filename, file_bytes)
-
-        room_name = None
-        saved_date = None
-
-        if file_format == "zip":
-            txt_bytes, zip_error = _extract_txt_from_zip(file_bytes)
-            if zip_error:
-                self._send_json(400, {"message": zip_error})
+        try:
+            filename, file_bytes, error_message = extract_multipart_file(
+                payload,
+                content_type,
+            )
+            if error_message:
+                self._send_json(400, {"message": error_message})
                 return
-            text = decode_payload(txt_bytes)
-            rows = parse_txt(text)
-            meta = extract_chat_meta(text)
-            room_name = meta["room_name"]
-            saved_date = meta["saved_date"]
-        elif file_format == "txt":
-            text = decode_payload(file_bytes)
-            rows = parse_txt(text)
-            meta = extract_chat_meta(text)
-            room_name = meta["room_name"]
-            saved_date = meta["saved_date"]
-        else:
-            csv_text = decode_payload(file_bytes)
-            rows = parse_csv_rows(csv_text)
-            room_name, saved_date = _extract_csv_meta(filename)
 
-        theme = extract_multipart_field(payload, content_type, "theme") or "honey"
+            if not file_bytes:
+                self._send_json(400, {"message": "파일이 비어 있습니다."})
+                return
 
-        leader = _extract_leader(rows)
+            track_mode = extract_multipart_field(payload, content_type, "track_mode")
+            if track_mode not in ("single", "dual"):
+                track_mode = "single"
 
-        users = analyze_chat(rows=rows, track_mode=track_mode)
-        xlsx_bytes = build_output_xlsx(users, track_mode=track_mode)
-        image_bytes = build_output_image(users, track_mode=track_mode, theme=theme)
-        headers, rows = build_preview_data(users, track_mode=track_mode)
-        logger.info("분석 완료: %d명 처리", len(users))
-        drive_filename = _build_drive_filename(leader, saved_date)
+            file_format = _detect_file_format(filename, file_bytes)
 
-        response_payload = {
-            "xlsx_base64": base64.b64encode(xlsx_bytes).decode("ascii"),
-            "image_base64": base64.b64encode(image_bytes).decode("ascii"),
-            "filename": "honeybible-results.xlsx",
-            "preview": {"headers": headers, "rows": rows},
-        }
-        if drive_filename:
-            response_payload["drive_filename"] = drive_filename
+            room_name = None
+            saved_date = None
 
-        self._send_json(200, response_payload)
+            if file_format == "zip":
+                txt_bytes, zip_error = _extract_txt_from_zip(file_bytes)
+                if zip_error:
+                    self._send_json(400, {"message": zip_error})
+                    return
+                text = decode_payload(txt_bytes)
+                rows = parse_txt(text)
+                meta = extract_chat_meta(text)
+                room_name = meta["room_name"]
+                saved_date = meta["saved_date"]
+            elif file_format == "txt":
+                text = decode_payload(file_bytes)
+                rows = parse_txt(text)
+                meta = extract_chat_meta(text)
+                room_name = meta["room_name"]
+                saved_date = meta["saved_date"]
+            else:
+                csv_text = decode_payload(file_bytes)
+                rows = parse_csv_rows(csv_text)
+                room_name, saved_date = _extract_csv_meta(filename)
+
+            theme = extract_multipart_field(payload, content_type, "theme") or "honey"
+
+            leader = _extract_leader(rows)
+
+            users = analyze_chat(rows=rows, track_mode=track_mode)
+            xlsx_bytes = build_output_xlsx(users, track_mode=track_mode)
+            image_bytes = build_output_image(users, track_mode=track_mode, theme=theme)
+            headers, rows = build_preview_data(users, track_mode=track_mode)
+            logger.info("분석 완료: %d명 처리", len(users))
+            drive_filename = _build_drive_filename(leader, saved_date)
+
+            response_payload = {
+                "xlsx_base64": base64.b64encode(xlsx_bytes).decode("ascii"),
+                "image_base64": base64.b64encode(image_bytes).decode("ascii"),
+                "filename": "honeybible-results.xlsx",
+                "preview": {"headers": headers, "rows": rows},
+            }
+            if drive_filename:
+                response_payload["drive_filename"] = drive_filename
+
+            self._send_json(200, response_payload)
+        except Exception:
+            logger.exception("분석 중 예상치 못한 오류 발생")
+            self._send_json(500, {"message": "서버 내부 오류가 발생했습니다."})
