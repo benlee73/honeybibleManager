@@ -575,7 +575,7 @@ class HoneyBibleHandler(BaseHTTPRequestHandler):
             response_payload = {
                 "xlsx_base64": base64.b64encode(xlsx_bytes).decode("ascii"),
                 "image_base64": base64.b64encode(image_bytes).decode("ascii"),
-                "filename": "honeybible-results.xlsx",
+                "filename": drive_filename or "honeybible-results.xlsx",
                 "preview": {"headers": headers, "rows": rows},
                 "track_mode": track_mode,
             }

@@ -314,6 +314,11 @@ const showResults = (headers, rows, trackMode) => {
     return;
   }
 
+  const resultsTitle = document.getElementById("resultsTitle");
+  if (resultsTitle) {
+    resultsTitle.textContent = trackMode === "merged" ? "통합 결과" : "분석 결과";
+  }
+
   const stats = computeStats(headers, rows, trackMode);
 
   const statMembers = document.getElementById("statMembers");
