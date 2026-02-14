@@ -473,8 +473,6 @@ form.addEventListener("submit", async (event) => {
   try {
     const formData = new FormData();
     formData.append("file", file, file.name);
-    const trackMode = document.querySelector('input[name="trackMode"]:checked').value;
-    formData.append("track_mode", trackMode);
     formData.append("theme", localStorage.getItem("theme") || "honey");
 
     const response = await fetch(API_ENDPOINT, {
@@ -506,7 +504,7 @@ form.addEventListener("submit", async (event) => {
 
     setStatus("success", "다운로드 준비가 끝났습니다.");
     resultsSection.classList.add("pop-in");
-    showResults(headers, rows, trackMode);
+    showResults(headers, rows, data.track_mode);
     downloadButton.href = currentObjectUrl;
     downloadButton.download = filename;
     downloadButton.classList.remove("is-disabled");

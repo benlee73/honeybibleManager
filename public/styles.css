@@ -364,40 +364,6 @@ h1 {
   background: var(--chip-bg);
 }
 
-.track-select {
-  border: 1px solid var(--line);
-  border-radius: 14px;
-  padding: 14px 18px;
-  margin: 0;
-  background: var(--input-bg);
-  display: flex;
-  align-items: center;
-  gap: 18px;
-}
-
-.track-legend {
-  font-weight: 600;
-  font-size: 14px;
-  color: var(--ink-1);
-  padding: 0 6px;
-}
-
-.track-option {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 14px;
-  color: var(--ink-2);
-  cursor: pointer;
-}
-
-.track-option input[type="radio"] {
-  accent-color: var(--honey-2);
-  width: 16px;
-  height: 16px;
-  cursor: pointer;
-}
-
 .actions {
   display: flex;
   flex-wrap: wrap;

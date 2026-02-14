@@ -20,6 +20,7 @@ from app.handler import (
     _clean_leader_name,
     _detect_file_format,
     _detect_schedule_type,
+    _detect_track_mode,
     _extract_csv_meta,
     _extract_leader,
     _extract_txt_from_zip,
@@ -410,6 +411,19 @@ class TestBuildDriveFilename:
         assert result == "꿀성경_방장_20260209_1050.xlsx"
 
 
+class TestDetectTrackMode:
+    def test_공지_문구_포함시_dual(self):
+        rows = [("방장", "헷갈릴 수 있는 내용을 다시 안내드립니다."), ("user1", "2/2 구약 😀")]
+        assert _detect_track_mode(rows) == "dual"
+
+    def test_공지_문구_없으면_single(self):
+        rows = [("user1", "2/2😀")]
+        assert _detect_track_mode(rows) == "single"
+
+    def test_빈_rows__single(self):
+        assert _detect_track_mode([]) == "single"
+
+
 class TestDetectScheduleType:
     def test_dual_모드__dual_반환(self):
         assert _detect_schedule_type([], "아무방", "dual") == "dual"
@@ -544,10 +558,13 @@ class TestAnalyzeEndpoint:
         assert "image_base64" in data
         assert "preview" in data
 
-    def test_track_mode_dual__정상_응답(self, test_server):
-        body, content_type = _make_analyze_payload(
-            "chat.csv", _CSV_DATA, fields={"track_mode": "dual"},
-        )
+    def test_track_mode_자동감지__dual_응답(self, test_server):
+        dual_csv = (
+            "Date,User,Message\n"
+            "2026-02-10,방장,헷갈릴 수 있는 내용을 다시 안내드립니다.\n"
+            "2026-02-10,김철수,1/6 ❤️\n"
+        ).encode("utf-8")
+        body, content_type = _make_analyze_payload("chat.csv", dual_csv)
         req = Request(
             f"{test_server}/analyze",
             data=body,
@@ -557,8 +574,22 @@ class TestAnalyzeEndpoint:
         resp = urlopen(req)
         assert resp.status == 200
         data = json.loads(resp.read())
+        assert data["track_mode"] == "dual"
         assert "xlsx_base64" in data
         assert "preview" in data
+
+    def test_track_mode_자동감지__single_응답(self, test_server):
+        body, content_type = _make_analyze_payload("chat.csv", _CSV_DATA)
+        req = Request(
+            f"{test_server}/analyze",
+            data=body,
+            headers={"Content-Type": content_type},
+            method="POST",
+        )
+        resp = urlopen(req)
+        assert resp.status == 200
+        data = json.loads(resp.read())
+        assert data["track_mode"] == "single"
 
     def test_빈_파일__400_에러(self, test_server):
         body, content_type = _make_analyze_payload("empty.csv", b"")
@@ -674,13 +705,11 @@ class TestAnalyzeEndpointWithSamples:
         assert "image_base64" in data
         assert len(data["preview"]["rows"]) >= 2
 
-    def test_성경일독_CSV_dual_모드__정상_분석(self, test_server):
+    def test_성경일독_CSV__track_mode_자동감지_응답_포함(self, test_server):
         with open(_SAMPLE_CSV_PART1, "rb") as f:
             file_bytes = f.read()
         filename = os.path.basename(_SAMPLE_CSV_PART1)
-        body, content_type = _make_analyze_payload(
-            filename, file_bytes, fields={"track_mode": "dual"},
-        )
+        body, content_type = _make_analyze_payload(filename, file_bytes)
         req = Request(
             f"{test_server}/analyze",
             data=body,
@@ -690,9 +719,8 @@ class TestAnalyzeEndpointWithSamples:
         resp = urlopen(req)
         assert resp.status == 200
         data = json.loads(resp.read())
-        assert "xlsx_base64" in data
-        assert "image_base64" in data
-        assert "preview" in data
+        assert "track_mode" in data
+        assert data["track_mode"] in ("single", "dual")
 
     def test_성경일독_CSV__xlsx_디코딩_가능(self, test_server):
         with open(_SAMPLE_CSV_PART1, "rb") as f:

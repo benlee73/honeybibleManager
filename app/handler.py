@@ -46,6 +46,15 @@ _ZIP_FILENAME_RE = re.compile(
 
 
 _LEADER_KEYWORD = "꿀성경 진행 방식 안내"
+_DUAL_MARKER = "헷갈릴 수 있는 내용을 다시 안내드립니다"
+
+
+def _detect_track_mode(rows):
+    """메시지에서 투트랙 공지 문구를 감지하여 track_mode를 반환한다."""
+    for _, message in rows:
+        if _DUAL_MARKER in message:
+            return "dual"
+    return "single"
 
 
 def _clean_leader_name(name):
@@ -500,10 +509,6 @@ class HoneyBibleHandler(BaseHTTPRequestHandler):
                 self._send_json(400, {"message": "파일이 비어 있습니다."})
                 return
 
-            track_mode = extract_multipart_field(payload, content_type, "track_mode")
-            if track_mode not in ("single", "dual"):
-                track_mode = "single"
-
             file_format = _detect_file_format(filename, file_bytes)
 
             room_name = None
@@ -540,6 +545,8 @@ class HoneyBibleHandler(BaseHTTPRequestHandler):
                 rows = parse_csv_rows(csv_text)
                 room_name, saved_date = _extract_csv_meta(filename)
 
+            track_mode = _detect_track_mode(rows)
+
             logger.info("파싱 결과: %d건의 메시지, 방이름: %s, 트랙 모드: %s",
                         len(rows), room_name or "(미확인)", track_mode)
 
@@ -566,6 +573,7 @@ class HoneyBibleHandler(BaseHTTPRequestHandler):
                 "image_base64": base64.b64encode(image_bytes).decode("ascii"),
                 "filename": "honeybible-results.xlsx",
                 "preview": {"headers": headers, "rows": rows},
+                "track_mode": track_mode,
             }
             if drive_filename:
                 response_payload["drive_filename"] = drive_filename
