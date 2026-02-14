@@ -36,6 +36,19 @@ def _normalize_room_name(room):
     return room.strip(" -_")
 
 
+_FILENAME_DATE_RE = re.compile(r"_(\d{8})_(\d{4})[_.]")
+
+
+def _extract_date_from_filename(name):
+    """파일명에서 YYYYMMDD_HHMM 형식의 날짜시간을 추출한다."""
+    if not name:
+        return None
+    m = _FILENAME_DATE_RE.search(name)
+    if m:
+        return f"{m.group(1)}_{m.group(2)}"
+    return None
+
+
 def _extract_room_from_filename(name):
     """파일명 끝에서 방이름을 추출한다.
 
@@ -236,6 +249,7 @@ def merge_files():
     nt_users = {}
     processed_rooms = []
     skipped_files = []
+    oldest_file_date = None
 
     # 4. 파일별 처리
     for file_info in latest_files:
@@ -290,6 +304,10 @@ def merge_files():
             for user, data in users.items():
                 _merge_user_into(bible_users, user, data["dates"], data["emoji"], leader)
 
+        file_date = _extract_date_from_filename(file_name)
+        if file_date and (oldest_file_date is None or file_date < oldest_file_date):
+            oldest_file_date = file_date
+
         processed_rooms.append(room_name or file_name)
 
     logger.info("통합 완료: 성경일독 %d명, 신약일독 %d명, %d개 방, %d개 스킵",
@@ -301,6 +319,7 @@ def merge_files():
         "nt_users": nt_users,
         "processed_rooms": processed_rooms,
         "skipped_files": skipped_files,
+        "oldest_file_date": oldest_file_date,
     }
 
 

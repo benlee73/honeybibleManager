@@ -426,7 +426,11 @@ class HoneyBibleHandler(BaseHTTPRequestHandler):
             except (ImportError, AttributeError):
                 pass
 
-            filename = "꿀성경_통합_진도표.xlsx"
+            oldest_date = result.get("oldest_file_date", "")
+            if oldest_date:
+                filename = f"꿀성경_통합_진도표_{oldest_date}.xlsx"
+            else:
+                filename = "꿀성경_통합_진도표.xlsx"
 
             response_payload = {
                 "success": True,

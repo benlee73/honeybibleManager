@@ -9,6 +9,7 @@ from openpyxl import load_workbook
 from app.analyzer import build_output_xlsx
 from app.merger import (
     _classify_education_users,
+    _extract_date_from_filename,
     _extract_room_from_filename,
     _load_education_config,
     build_merged_preview,
@@ -18,6 +19,23 @@ from app.merger import (
     read_users_from_xlsx,
     select_latest_per_room,
 )
+
+
+class TestExtractDateFromFilename:
+    def test_정상_파일명__날짜시간_추출(self):
+        assert _extract_date_from_filename("꿀성경_방장_20260210_1050_방이름.xlsx") == "20260210_1050"
+
+    def test_방이름_없는_파일명__날짜시간_추출(self):
+        assert _extract_date_from_filename("꿀성경_방장_20260210_1050.xlsx") == "20260210_1050"
+
+    def test_패턴_불일치__None_반환(self):
+        assert _extract_date_from_filename("기타파일.xlsx") is None
+
+    def test_None__None_반환(self):
+        assert _extract_date_from_filename(None) is None
+
+    def test_빈_문자열__None_반환(self):
+        assert _extract_date_from_filename("") is None
 
 
 class TestExtractRoomFromFilename:
@@ -279,6 +297,7 @@ class TestMergeFiles:
         assert "user1" in result["bible_users"]
         assert result["bible_users"]["user1"]["dates"] == {"2/2", "2/3"}
         assert len(result["nt_users"]) == 0
+        assert result["oldest_file_date"] == "20260210_1050"
 
     @patch("app.merger.download_drive_file")
     @patch("app.merger.list_drive_files")
@@ -357,7 +376,7 @@ class TestMergeFiles:
         mock_list.return_value = {
             "success": True,
             "files": [
-                {"id": "1", "name": "꿀성경_방장A_20260210_1050_방1.xlsx", "modifiedTime": "2026-02-10T10:50:00Z"},
+                {"id": "1", "name": "꿀성경_방장A_20260209_0900_방1.xlsx", "modifiedTime": "2026-02-09T09:00:00Z"},
                 {"id": "2", "name": "꿀성경_방장B_20260210_1050_방2.xlsx", "modifiedTime": "2026-02-10T10:50:00Z"},
             ],
         }
@@ -369,6 +388,7 @@ class TestMergeFiles:
         result = merge_files()
         assert result["success"] is True
         assert result["bible_users"]["user1"]["dates"] == {"2/2", "2/3", "2/4"}
+        assert result["oldest_file_date"] == "20260209_0900"
 
     @patch("app.merger.list_drive_files")
     def test_Drive_실패__에러_반환(self, mock_list):
