@@ -404,6 +404,9 @@ class HoneyBibleHandler(BaseHTTPRequestHandler):
             room_name = None
             saved_date = None
 
+            logger.info("파일 형식: %s, 파일명: %s, 크기: %d bytes",
+                        file_format, filename or "(없음)", len(file_bytes))
+
             if file_format == "zip":
                 txt_bytes, zip_error = _extract_txt_from_zip(file_bytes)
                 if zip_error:
@@ -424,6 +427,9 @@ class HoneyBibleHandler(BaseHTTPRequestHandler):
                 csv_text = decode_payload(file_bytes)
                 rows = parse_csv_rows(csv_text)
                 room_name, saved_date = _extract_csv_meta(filename)
+
+            logger.info("파싱 결과: %d건의 메시지, 방이름: %s, 트랙 모드: %s",
+                        len(rows), room_name or "(미확인)", track_mode)
 
             theme = extract_multipart_field(payload, content_type, "theme") or "honey"
 

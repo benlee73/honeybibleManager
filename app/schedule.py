@@ -1,5 +1,9 @@
 import datetime
 
+from app.logger import get_logger
+
+logger = get_logger("schedule")
+
 # 성경일독 파트별 시작~종료
 _BIBLE_RANGES = [
     (datetime.date(2026, 2, 2), datetime.date(2026, 5, 30)),
@@ -57,6 +61,12 @@ def detect_schedule(rows):
 
     is_bible = has_genesis and has_exodus
     is_nt = has_matthew and has_mark
+
+    logger.info(
+        "진도표 키워드 감지 — 창세기: %s, 출애굽기: %s, 마태복음: %s, 마가복음: %s → %s",
+        has_genesis, has_exodus, has_matthew, has_mark,
+        "성경일독" if is_bible else ("신약일독" if is_nt else "미감지"),
+    )
 
     if is_bible:
         return BIBLE_DATES

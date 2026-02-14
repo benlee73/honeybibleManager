@@ -1,5 +1,9 @@
 import re
 
+from app.logger import get_logger
+
+logger = get_logger("txt_parser")
+
 # TXT 헤더 첫 줄: "XXX 님과 카카오톡 대화"
 _ROOM_NAME_RE = re.compile(r"^(.+?)\s*님과 카카오톡 대화$")
 
@@ -74,6 +78,10 @@ def parse_txt(text):
     rows = []
     current_user = None
     current_message = None
+    skip_header = 0
+    skip_date_header = 0
+    skip_system = 0
+    multiline_count = 0
 
     for line in lines:
         stripped = line.strip()
@@ -82,9 +90,11 @@ def parse_txt(text):
             continue
 
         if _FILE_HEADER_RE.match(stripped):
+            skip_header += 1
             continue
 
         if _DATE_HEADER_RE.match(stripped):
+            skip_date_header += 1
             continue
 
         user_match = _USER_MSG_RE.match(stripped)
@@ -96,6 +106,7 @@ def parse_txt(text):
             continue
 
         if _SYSTEM_MSG_RE.match(stripped):
+            skip_system += 1
             if current_user is not None:
                 rows.append((current_user, current_message))
                 current_user = None
@@ -105,8 +116,16 @@ def parse_txt(text):
         # 멀티라인 메시지: 타임스탬프 없는 줄은 이전 메시지에 연결
         if current_user is not None:
             current_message += "\n" + stripped
+            multiline_count += 1
 
     if current_user is not None:
         rows.append((current_user, current_message))
+
+    logger.info(
+        "TXT 파싱: 전체 %d줄, 사용자 메시지 %d건 (파일헤더 %d, 날짜헤더 %d, "
+        "시스템메시지 %d, 멀티라인연결 %d)",
+        len(lines), len(rows), skip_header, skip_date_header,
+        skip_system, multiline_count,
+    )
 
     return rows
