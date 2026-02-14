@@ -200,11 +200,14 @@ const hideResults = () => {
 };
 
 const computeStats = (headers, rows, trackMode) => {
-  const dateStart = trackMode === "dual" ? 3 : 2;
-  const dateCount = Math.max(0, headers.length - dateStart);
+  const nameIdx = headers.indexOf("이름");
+  const dateStart = headers.findIndex(
+    (h) => !["담당", "이름", "이모티콘", "트랙"].includes(h),
+  );
+  const dateCount = dateStart >= 0 ? headers.length - dateStart : 0;
 
   const nameSet = new Set();
-  rows.forEach((row) => nameSet.add(row[0]));
+  rows.forEach((row) => nameSet.add(row[nameIdx]));
   const members = nameSet.size;
 
   let totalO = 0;
@@ -217,7 +220,7 @@ const computeStats = (headers, rows, trackMode) => {
       }
     }
     totalO += rowO;
-    const name = row[0];
+    const name = row[nameIdx];
     nameCounts[name] = (nameCounts[name] || 0) + rowO;
   });
 
@@ -225,15 +228,16 @@ const computeStats = (headers, rows, trackMode) => {
   const avgRate = totalCells > 0 ? Math.round((totalO / totalCells) * 100) : 0;
 
   let perfectCount = 0;
+  const trackIdx = headers.indexOf("트랙");
   if (trackMode === "dual") {
     const oldNameCounts = {};
     rows.forEach((row) => {
-      if (row[2] !== "구약") return;
+      if (row[trackIdx] !== "구약") return;
       let rowO = 0;
       for (let i = dateStart; i < row.length; i += 1) {
         if (row[i] === "O") rowO += 1;
       }
-      oldNameCounts[row[0]] = (oldNameCounts[row[0]] || 0) + rowO;
+      oldNameCounts[row[nameIdx]] = (oldNameCounts[row[nameIdx]] || 0) + rowO;
     });
     for (const [name, count] of Object.entries(oldNameCounts)) {
       if (dateCount > 0 && count === dateCount) perfectCount += 1;
@@ -241,7 +245,7 @@ const computeStats = (headers, rows, trackMode) => {
   } else {
     const nameTotalCells = {};
     rows.forEach((row) => {
-      const name = row[0];
+      const name = row[nameIdx];
       nameTotalCells[name] = (nameTotalCells[name] || 0) + dateCount;
     });
     for (const [name, total] of Object.entries(nameTotalCells)) {
