@@ -2,6 +2,7 @@ import io
 import json
 import os
 import re
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from openpyxl import Workbook, load_workbook
 from openpyxl.styles import Border, Side
@@ -263,13 +264,22 @@ def merge_files():
     skipped_files = []
     oldest_file_date = None
 
-    # 4. 파일별 처리
+    # 4. 파일 병렬 다운로드
+    downloads = {}
+    with ThreadPoolExecutor(max_workers=min(len(latest_files), 8)) as pool:
+        futures = {
+            pool.submit(download_drive_file, f["id"]): f for f in latest_files
+        }
+        for future in as_completed(futures):
+            file_info = futures[future]
+            downloads[file_info["id"]] = future.result()
+
+    # 5. 파일별 처리
     for file_info in latest_files:
         file_id = file_info["id"]
         file_name = file_info["name"]
 
-        # 다운로드
-        dl_result = download_drive_file(file_id)
+        dl_result = downloads[file_id]
         if not dl_result["success"]:
             skipped_files.append({"name": file_name, "reason": dl_result["message"]})
             continue
