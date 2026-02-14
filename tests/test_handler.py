@@ -425,6 +425,10 @@ class TestDetectScheduleType:
         rows = [("user1", "마태복음 1장"), ("user2", "마가복음 2장")]
         assert _detect_schedule_type(rows, "일반방", "single") == "nt"
 
+    def test_메시지에_교육국_포함__education_반환(self):
+        rows = [("user1", "꿀성경 교육국 방입니다!"), ("user2", "창세기 1장")]
+        assert _detect_schedule_type(rows, "일반방", "single") == "education"
+
     def test_키워드_없음__unknown_반환(self):
         rows = [("user1", "안녕하세요")]
         assert _detect_schedule_type(rows, "일반방", "single") == "unknown"
