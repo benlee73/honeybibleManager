@@ -1125,11 +1125,21 @@ body[data-theme="neon"] .guide-toggle-indicator {
   line-height: 1.5;
 }
 
+.merge-panel > .actions,
+.merge-panel > .status,
+.merge-panel > .merge-stats {
+  margin-top: 12px;
+}
+
 .merge-stats {
   display: flex;
   gap: 12px;
   flex-wrap: wrap;
   margin-top: 12px;
+}
+
+[hidden] {
+  display: none !important;
 }
 
 .merge-stat {

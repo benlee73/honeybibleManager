@@ -637,6 +637,7 @@ const mergeWarnings = document.getElementById("mergeWarnings");
 
 const setMergeStatus = (state, message) => {
   if (!mergeStatus) return;
+  mergeStatus.hidden = false;
   mergeStatus.dataset.state = state;
   if (mergeStatusText) mergeStatusText.textContent = message;
 };
