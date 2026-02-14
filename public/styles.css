@@ -289,6 +289,10 @@ h1 {
   color: var(--ink-2);
   margin: 0;
   line-height: 1.5;
+  padding: 18px 20px;
+  border-radius: 18px;
+  border: 1px solid var(--line);
+  background: var(--input-bg);
 }
 
 .stack {
