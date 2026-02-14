@@ -15,6 +15,7 @@ from app.analyzer import (
     extract_tracks,
     iter_data_rows,
     message_contains_emoji,
+    normalize_user_name,
     parse_csv_rows,
     sort_dates,
 )
@@ -344,15 +345,17 @@ class TestAnalyzeChatDual:
             ["2024-01-04", "광천 김형은", "2/3~6 구약 신약(연필)"],
         ])
         result = analyze_chat(csv_text, track_mode="dual")
-        assert "광천 강창우" in result
-        assert result["광천 강창우"]["emoji"] == "(무표정)"
-        assert result["광천 강창우"]["dates_old"] == {"2/2", "2/4"}
-        assert result["광천 강창우"]["dates_new"] == {"2/2", "2/4"}
+        # "광천 강창우" → 정규화 → "강창우"
+        assert "강창우" in result
+        assert result["강창우"]["emoji"] == "(무표정)"
+        assert result["강창우"]["dates_old"] == {"2/2", "2/4"}
+        assert result["강창우"]["dates_new"] == {"2/2", "2/4"}
 
-        assert "광천 김형은" in result
-        assert result["광천 김형은"]["emoji"] == "(연필)"
-        assert result["광천 김형은"]["dates_old"] == {"2/2", "2/3", "2/4", "2/5", "2/6"}
-        assert result["광천 김형은"]["dates_new"] == {"2/2", "2/3", "2/4", "2/5", "2/6"}
+        # "광천 김형은" → 정규화 → "김형은"
+        assert "김형은" in result
+        assert result["김형은"]["emoji"] == "(연필)"
+        assert result["김형은"]["dates_old"] == {"2/2", "2/3", "2/4", "2/5", "2/6"}
+        assert result["김형은"]["dates_new"] == {"2/2", "2/3", "2/4", "2/5", "2/6"}
 
     def test_analyze_chat_single__기존_동작_유지(self):
         csv_text = self._make_csv([
@@ -1010,3 +1013,38 @@ class TestBuildDualPreviewData:
         # 신약 헤더 일치
         xlsx_new_h = [ws_new.cell(1, c).value for c in range(1, ws_new.max_column + 1)]
         assert new_h == xlsx_new_h
+
+
+class TestNormalizeUserName:
+    def test_숫자_제거(self):
+        assert normalize_user_name("김신영99") == "김신영"
+
+    def test_영어_제거(self):
+        assert normalize_user_name("홍길동ABC") == "홍길동"
+
+    def test_공백_제거(self):
+        assert normalize_user_name("홍 길 동") == "홍길동"
+
+    def test_이모지_제거(self):
+        assert normalize_user_name("🍯김신영") == "김신영"
+
+    def test_키워드_제거__광천(self):
+        assert normalize_user_name("광천유영훈") == "유영훈"
+
+    def test_키워드_제거__누나(self):
+        assert normalize_user_name("예슬누나") == "예슬"
+
+    def test_키워드_제거__오빠(self):
+        assert normalize_user_name("철수오빠") == "철수"
+
+    def test_키워드_제거__언니(self):
+        assert normalize_user_name("영희언니") == "영희"
+
+    def test_복합__이모지_숫자_영어_공백_키워드(self):
+        assert normalize_user_name("🍯 광천 유영훈 99 ABC") == "유영훈"
+
+    def test_모두_제거되면__원본_반환(self):
+        assert normalize_user_name("ABC 123") == "ABC 123"
+
+    def test_한글만__그대로(self):
+        assert normalize_user_name("김철수") == "김철수"

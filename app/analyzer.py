@@ -5,13 +5,30 @@ from openpyxl import Workbook
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 
 from app.date_parser import DATE_TIME_PATTERN, parse_dates
-from app.emoji import extract_trailing_emoji, normalize_emoji
+from app.emoji import extract_trailing_emoji, is_emoji_component, normalize_emoji
 from app.logger import get_logger
 from app.schedule import BIBLE_DATES, NT_DATES, detect_schedule
 
 logger = get_logger("analyzer")
 
 MAX_DATES_PER_MESSAGE = 14
+
+_STRIP_WORDS = ("광천", "누나", "오빠", "언니")
+
+
+def normalize_user_name(name: str) -> str:
+    """이름에서 숫자·이모티콘·영어·공백·특정 키워드를 제거하여 한글 이름만 남긴다."""
+    result = name
+    for word in _STRIP_WORDS:
+        result = result.replace(word, "")
+    result = "".join(
+        ch for ch in result
+        if not is_emoji_component(ch)
+        and not ch.isdigit()
+        and not ch.isspace()
+        and not ("A" <= ch <= "Z" or "a" <= ch <= "z")
+    )
+    return result if result else name
 
 
 def _max_date(dates):
@@ -107,6 +124,9 @@ def parse_csv_rows(csv_text):
 def analyze_chat(csv_text=None, track_mode="single", rows=None):
     if rows is None:
         rows = parse_csv_rows(csv_text or "")
+
+    # 사용자 이름 정규화
+    rows = [(normalize_user_name(user), message) for user, message in rows]
 
     logger.info("파싱된 메시지 수: %d, 트랙 모드: %s", len(rows), track_mode)
     if not rows:
