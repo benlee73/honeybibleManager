@@ -1107,6 +1107,51 @@ body[data-theme="neon"] .guide-toggle-indicator {
   }
 }
 
+/* 통합 진도표 패널 */
+.merge-panel {
+  grid-column: 1 / -1;
+  animation-delay: 0.2s;
+}
+
+.merge-title {
+  font-family: var(--font-display);
+  margin: 0 0 8px;
+}
+
+.merge-desc {
+  font-size: 14px;
+  color: var(--ink-2);
+  margin: 0 0 16px;
+  line-height: 1.5;
+}
+
+.merge-stats {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 12px;
+}
+
+.merge-stat {
+  font-size: 13px;
+  font-weight: 600;
+  padding: 6px 14px;
+  border-radius: 999px;
+  background: var(--chip-bg);
+  border: 1px solid var(--line);
+  color: var(--ink-1);
+}
+
+.merge-warnings {
+  margin-top: 10px;
+  font-size: 13px;
+  color: #b13b2b;
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: rgba(177, 59, 43, 0.08);
+  border: 1px solid rgba(177, 59, 43, 0.2);
+}
+
 @media (max-width: 1024px) {
   .panel,
   .panel.note {

@@ -482,7 +482,16 @@ def build_dual_preview_data(users):
     return old_headers, old_rows, new_headers, new_rows
 
 
-def build_output_xlsx(users, track_mode="single"):
+def _add_meta_sheet(wb, meta):
+    """숨겨진 _메타 시트를 생성하여 key-value 메타데이터를 저장한다."""
+    ws = wb.create_sheet(title="_메타")
+    ws.sheet_state = "hidden"
+    for row_idx, (key, value) in enumerate(meta.items(), start=1):
+        ws.cell(row=row_idx, column=1, value=key)
+        ws.cell(row=row_idx, column=2, value=str(value))
+
+
+def build_output_xlsx(users, track_mode="single", meta=None):
     wb = Workbook()
 
     if track_mode == "dual":
@@ -499,6 +508,9 @@ def build_output_xlsx(users, track_mode="single"):
         ws = wb.active
         ws.title = "꿀성경 진도표"
         _apply_sheet_style(ws, headers, rows)
+
+    if meta:
+        _add_meta_sheet(wb, meta)
 
     buf = io.BytesIO()
     wb.save(buf)

@@ -624,3 +624,141 @@ document.querySelectorAll(".guide-toggle-btn").forEach((btn) => {
 if (/Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent)) {
   switchGuideTab("mobile");
 }
+
+/* 통합 진도표 */
+const mergeButton = document.getElementById("mergeButton");
+const mergeStatus = document.getElementById("mergeStatus");
+const mergeStatusText = mergeStatus ? mergeStatus.querySelector(".status-text") : null;
+const mergeProgressBar = document.getElementById("mergeProgressBar");
+const mergeProgressFill = document.getElementById("mergeProgressFill");
+const mergeProgressText = document.getElementById("mergeProgressText");
+const mergeStats = document.getElementById("mergeStats");
+const mergeWarnings = document.getElementById("mergeWarnings");
+
+const setMergeStatus = (state, message) => {
+  if (!mergeStatus) return;
+  mergeStatus.dataset.state = state;
+  if (mergeStatusText) mergeStatusText.textContent = message;
+};
+
+const setMergeProgress = (percent, label) => {
+  if (!mergeProgressBar) return;
+  mergeProgressBar.hidden = false;
+  if (mergeProgressFill) mergeProgressFill.style.width = `${percent}%`;
+  if (mergeProgressText) mergeProgressText.textContent = label || `${percent}%`;
+};
+
+if (mergeButton) {
+  mergeButton.addEventListener("click", async () => {
+    mergeButton.disabled = true;
+    setMergeStatus("loading", "Drive에서 파일을 가져오는 중...");
+    setMergeProgress(0);
+
+    if (mergeStats) mergeStats.hidden = true;
+    if (mergeWarnings) {
+      mergeWarnings.hidden = true;
+      mergeWarnings.textContent = "";
+    }
+
+    // 진행 바 애니메이션
+    let progressCancelled = false;
+    const animateProgress = () => {
+      let current = 0;
+      const step = () => {
+        if (progressCancelled) return;
+        current = Math.min(current + 0.5, 90);
+        setMergeProgress(Math.round(current), "파일 처리 중...");
+        if (current < 90) requestAnimationFrame(step);
+      };
+      requestAnimationFrame(step);
+    };
+    animateProgress();
+
+    try {
+      const response = await fetch("/merge", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: "{}",
+      });
+
+      progressCancelled = true;
+
+      const data = await response.json();
+
+      if (!data.success) {
+        setMergeProgress(100, "실패");
+        setMergeStatus("error", data.message || "통합에 실패했습니다.");
+        mergeButton.disabled = false;
+        return;
+      }
+
+      setMergeProgress(100, "완료!");
+      setMergeStatus("success", "통합 완료! 결과를 확인하세요.");
+
+      // 통계 표시
+      if (mergeStats && data.stats) {
+        const s = data.stats;
+        document.getElementById("mergeStatRooms").textContent = `${s.room_count}개 방`;
+        document.getElementById("mergeStatBible").textContent = `성경일독 ${s.bible_count}명`;
+        document.getElementById("mergeStatNt").textContent = `신약일독 ${s.nt_count}명`;
+        mergeStats.hidden = false;
+      }
+
+      // 스킵 경고
+      if (mergeWarnings && data.skipped_files && data.skipped_files.length > 0) {
+        const lines = data.skipped_files.map(
+          (f) => `${f.name}: ${f.reason}`
+        );
+        mergeWarnings.textContent = `건너뛴 파일: ${lines.join(", ")}`;
+        mergeWarnings.hidden = false;
+      }
+
+      // 결과 표시 (기존 results 섹션 재사용)
+      const { headers, rows } = data.preview;
+      const trackMode = "merged";
+
+      // XLSX 다운로드 준비
+      const xlsxBinary = atob(data.xlsx_base64);
+      const xlsxArray = new Uint8Array(xlsxBinary.length);
+      for (let i = 0; i < xlsxBinary.length; i += 1) {
+        xlsxArray[i] = xlsxBinary.charCodeAt(i);
+      }
+      const blob = new Blob([xlsxArray], {
+        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      });
+
+      clearObjectUrl();
+      currentObjectUrl = URL.createObjectURL(blob);
+
+      showResults(headers, rows, trackMode);
+      downloadButton.href = currentObjectUrl;
+      downloadButton.download = data.filename || "꿀성경_통합_진도표.xlsx";
+      downloadButton.classList.remove("is-disabled");
+      downloadButton.setAttribute("aria-disabled", "false");
+
+      if (data.image_base64 && resultImage) {
+        currentImageBase64 = data.image_base64;
+        resultImage.src = `data:image/png;base64,${currentImageBase64}`;
+        if (imageToggle) imageToggle.hidden = false;
+      }
+
+      if (data.xlsx_base64 && driveButton) {
+        currentXlsxBase64 = data.xlsx_base64;
+        currentDriveFilename = data.drive_filename || null;
+        driveButton.classList.remove("is-disabled");
+        driveButton.disabled = false;
+      }
+
+      resultsSection.hidden = false;
+      resultsSection.classList.add("pop-in");
+      resultsSection.scrollIntoView({ behavior: "smooth" });
+    } catch (error) {
+      progressCancelled = true;
+      setMergeProgress(100, "오류");
+      const message = error instanceof Error ? error.message : "통합에 실패했습니다.";
+      setMergeStatus("error", message);
+    } finally {
+      mergeButton.disabled = false;
+    }
+  });
+}

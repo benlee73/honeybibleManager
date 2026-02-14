@@ -19,6 +19,7 @@ from app.handler import (
     _build_drive_filename,
     _clean_leader_name,
     _detect_file_format,
+    _detect_schedule_type,
     _extract_csv_meta,
     _extract_leader,
     _extract_txt_from_zip,
@@ -359,6 +360,42 @@ class TestBuildDriveFilename:
     def test_둘_다_없음__None_반환(self):
         result = _build_drive_filename(None, None)
         assert result is None
+
+    def test_room_name_포함(self):
+        result = _build_drive_filename("방장", "2026/02/09-10:50", room_name="꿀성경 2026 성경일독 part1")
+        assert result == "꿀성경_방장_20260209_1050_2026 성경일독 part1.xlsx"
+
+    def test_room_name_꿀성경_접두사_제거(self):
+        result = _build_drive_filename("방장", "2026/02/09-10:50", room_name="꿀성경 - 교육국")
+        assert result == "꿀성경_방장_20260209_1050_교육국.xlsx"
+
+    def test_room_name_None__기존_형식(self):
+        result = _build_drive_filename("방장", "2026/02/09-10:50", room_name=None)
+        assert result == "꿀성경_방장_20260209_1050.xlsx"
+
+    def test_room_name_빈문자열__기존_형식(self):
+        result = _build_drive_filename("방장", "2026/02/09-10:50", room_name="")
+        assert result == "꿀성경_방장_20260209_1050.xlsx"
+
+
+class TestDetectScheduleType:
+    def test_dual_모드__dual_반환(self):
+        assert _detect_schedule_type([], "아무방", "dual") == "dual"
+
+    def test_교육국_방이름__education_반환(self):
+        assert _detect_schedule_type([], "꿀성경 - 교육국", "single") == "education"
+
+    def test_성경일독_키워드__bible_반환(self):
+        rows = [("user1", "창세기 1장"), ("user2", "출애굽기 2장")]
+        assert _detect_schedule_type(rows, "일반방", "single") == "bible"
+
+    def test_신약일독_키워드__nt_반환(self):
+        rows = [("user1", "마태복음 1장"), ("user2", "마가복음 2장")]
+        assert _detect_schedule_type(rows, "일반방", "single") == "nt"
+
+    def test_키워드_없음__unknown_반환(self):
+        rows = [("user1", "안녕하세요")]
+        assert _detect_schedule_type(rows, "일반방", "single") == "unknown"
 
 
 def _make_analyze_payload(filename, file_content, fields=None, boundary="testboundary"):

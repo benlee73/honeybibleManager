@@ -3,7 +3,12 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from app.drive_uploader import is_drive_configured, upload_to_drive
+from app.drive_uploader import (
+    download_drive_file,
+    is_drive_configured,
+    list_drive_files,
+    upload_to_drive,
+)
 
 _OAUTH_ENVS = {
     "GOOGLE_CLIENT_ID": "test-client-id",
@@ -112,3 +117,78 @@ class TestUploadToDrive:
         result = upload_to_drive(b"fake xlsx bytes")
         assert result["success"] is False
         assert "업로드 실패" in result["message"]
+
+
+class TestListDriveFiles:
+    def test_환경변수_미설정__실패_반환(self, monkeypatch):
+        for key in _OAUTH_ENVS:
+            monkeypatch.delenv(key, raising=False)
+        result = list_drive_files()
+        assert result["success"] is False
+
+    @patch("googleapiclient.discovery.build")
+    @patch("google.oauth2.credentials.Credentials")
+    def test_목록_조회_성공(self, mock_creds_cls, mock_build, monkeypatch):
+        for key, value in _OAUTH_ENVS.items():
+            monkeypatch.setenv(key, value)
+
+        mock_creds_cls.return_value = MagicMock()
+        mock_service = MagicMock()
+        mock_build.return_value = mock_service
+
+        mock_service.files.return_value.list.return_value.execute.return_value = {
+            "files": [
+                {"id": "f1", "name": "꿀성경_방장_20260210_1050.xlsx", "modifiedTime": "2026-02-10T10:50:00Z"},
+                {"id": "f2", "name": "꿀성경_방장_20260211_1050.xlsx", "modifiedTime": "2026-02-11T10:50:00Z"},
+            ]
+        }
+
+        result = list_drive_files()
+        assert result["success"] is True
+        assert len(result["files"]) == 2
+
+    @patch("googleapiclient.discovery.build")
+    @patch("google.oauth2.credentials.Credentials")
+    def test_목록_조회_API_예외__실패_반환(self, mock_creds_cls, mock_build, monkeypatch):
+        for key, value in _OAUTH_ENVS.items():
+            monkeypatch.setenv(key, value)
+
+        mock_creds_cls.return_value = MagicMock()
+        mock_service = MagicMock()
+        mock_build.return_value = mock_service
+        mock_service.files.return_value.list.return_value.execute.side_effect = Exception("API 오류")
+
+        result = list_drive_files()
+        assert result["success"] is False
+        assert "목록 조회 실패" in result["message"]
+
+
+class TestDownloadDriveFile:
+    def test_환경변수_미설정__실패_반환(self, monkeypatch):
+        for key in _OAUTH_ENVS:
+            monkeypatch.delenv(key, raising=False)
+        result = download_drive_file("file_id")
+        assert result["success"] is False
+
+    @patch("googleapiclient.http.MediaIoBaseDownload")
+    @patch("googleapiclient.discovery.build")
+    @patch("google.oauth2.credentials.Credentials")
+    def test_다운로드_성공(self, mock_creds_cls, mock_build, mock_dl_cls, monkeypatch):
+        for key, value in _OAUTH_ENVS.items():
+            monkeypatch.setenv(key, value)
+
+        mock_creds_cls.return_value = MagicMock()
+        mock_service = MagicMock()
+        mock_build.return_value = mock_service
+
+        # 파일 이름 조회 mock
+        mock_service.files.return_value.get.return_value.execute.return_value = {"name": "test.xlsx"}
+
+        # MediaIoBaseDownload mock
+        mock_dl = MagicMock()
+        mock_dl.next_chunk.return_value = (None, True)
+        mock_dl_cls.return_value = mock_dl
+
+        result = download_drive_file("file_id_123")
+        assert result["success"] is True
+        assert result["name"] == "test.xlsx"

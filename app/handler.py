@@ -18,8 +18,10 @@ from app.analyzer import (
     parse_csv_rows,
 )
 from app.drive_uploader import is_drive_configured, upload_to_drive
+from app.merger import build_merged_preview, build_merged_xlsx, merge_files
 from app.image_builder import build_output_image
 from app.logger import get_logger
+from app.schedule import BIBLE_DATES, NT_DATES, detect_schedule
 from app.txt_parser import extract_chat_meta, parse_txt
 
 logger = get_logger("handler")
@@ -59,15 +61,16 @@ def _extract_leader(rows):
     return None
 
 
-def _build_drive_filename(leader, saved_date):
+def _build_drive_filename(leader, saved_date, room_name=None):
     """방장 이름과 저장 날짜로 Drive 업로드용 파일명을 생성한다.
 
     Args:
         leader: 방장 이름 (None이면 기본값 사용)
         saved_date: "YYYY/MM/DD-HH:MM" 형식 (None이면 기본값 사용)
+        room_name: 카톡방 이름 (None이면 기존 형식 유지)
 
     Returns:
-        str|None: "꿀성경_방장_YYYYMMDD_HHMM.xlsx" 또는 None
+        str|None: "꿀성경_방장_YYYYMMDD_HHMM_방이름.xlsx" 또는 None
     """
     if not leader and not saved_date:
         return None
@@ -76,7 +79,37 @@ def _build_drive_filename(leader, saved_date):
     if saved_date:
         # "YYYY/MM/DD-HH:MM" → "YYYYMMDD_HHMM"
         date_part = "_" + saved_date.replace("/", "").replace("-", "_").replace(":", "")
-    return f"꿀성경_{name_part}{date_part}.xlsx"
+    room_part = ""
+    if room_name:
+        # "꿀성경" 접두사 제거 후 파일명 안전 문자 처리
+        clean_room = room_name
+        for prefix in ("꿀성경 ", "꿀성경"):
+            if clean_room.startswith(prefix):
+                clean_room = clean_room[len(prefix):]
+                break
+        clean_room = clean_room.strip(" -_")
+        clean_room = re.sub(r'[\\/*?:"<>|]', "", clean_room)
+        if clean_room:
+            room_part = f"_{clean_room}"
+    return f"꿀성경_{name_part}{date_part}{room_part}.xlsx"
+
+
+def _detect_schedule_type(rows, room_name, track_mode):
+    """파싱된 행, 방이름, 트랙모드를 기반으로 진도표 유형을 판별한다.
+
+    Returns:
+        str: "dual", "education", "bible", "nt", "unknown" 중 하나
+    """
+    if track_mode == "dual":
+        return "dual"
+    if room_name and "교육국" in room_name:
+        return "education"
+    schedule = detect_schedule(rows)
+    if schedule is BIBLE_DATES:
+        return "bible"
+    if schedule is NT_DATES:
+        return "nt"
+    return "unknown"
 
 
 def _extract_csv_meta(filename):
@@ -340,12 +373,68 @@ class HoneyBibleHandler(BaseHTTPRequestHandler):
         result = upload_to_drive(file_bytes, filename=drive_filename)
         self._send_json(200, result)
 
+    def _handle_merge(self):
+        if not is_drive_configured():
+            self._send_json(200, {
+                "success": False,
+                "message": "Google Drive가 설정되지 않았습니다. 통합 기능을 사용하려면 Drive 설정이 필요합니다.",
+            })
+            return
+
+        try:
+            result = merge_files()
+            if not result["success"]:
+                self._send_json(200, result)
+                return
+
+            bible_users = result["bible_users"]
+            nt_users = result["nt_users"]
+
+            xlsx_bytes = build_merged_xlsx(bible_users, nt_users)
+            preview_headers, preview_rows = build_merged_preview(bible_users, nt_users)
+
+            # 통합 이미지 생성
+            image_bytes = b""
+            try:
+                from app.image_builder import build_merged_image
+                image_bytes = build_merged_image(bible_users, nt_users)
+            except (ImportError, AttributeError):
+                pass
+
+            filename = "꿀성경_통합_진도표.xlsx"
+
+            response_payload = {
+                "success": True,
+                "xlsx_base64": base64.b64encode(xlsx_bytes).decode("ascii"),
+                "filename": filename,
+                "drive_filename": filename,
+                "preview": {"headers": preview_headers, "rows": preview_rows},
+                "stats": {
+                    "bible_count": len(bible_users),
+                    "nt_count": len(nt_users),
+                    "room_count": len(result["processed_rooms"]),
+                },
+                "processed_rooms": result["processed_rooms"],
+                "skipped_files": result["skipped_files"],
+            }
+            if image_bytes:
+                response_payload["image_base64"] = base64.b64encode(image_bytes).decode("ascii")
+
+            self._send_json(200, response_payload)
+        except Exception:
+            logger.exception("통합 중 예상치 못한 오류 발생")
+            self._send_json(500, {"message": "서버 내부 오류가 발생했습니다."})
+
     def do_POST(self):
         logger.info("요청 수신: POST %s", self.path)
         clean_path = self.path.split("?", 1)[0].split("#", 1)[0]
 
         if clean_path == "/upload-drive":
             self._handle_upload_drive()
+            return
+
+        if clean_path == "/merge":
+            self._handle_merge()
             return
 
         if clean_path != "/analyze":
@@ -436,11 +525,18 @@ class HoneyBibleHandler(BaseHTTPRequestHandler):
             leader = _extract_leader(rows)
 
             users = analyze_chat(rows=rows, track_mode=track_mode)
-            xlsx_bytes = build_output_xlsx(users, track_mode=track_mode)
+            schedule_type = _detect_schedule_type(rows, room_name, track_mode)
+            meta = {
+                "room_name": room_name or "",
+                "track_mode": track_mode,
+                "schedule_type": schedule_type,
+                "leader": leader or "",
+            }
+            xlsx_bytes = build_output_xlsx(users, track_mode=track_mode, meta=meta)
             image_bytes = build_output_image(users, track_mode=track_mode, theme=theme)
             headers, rows = build_preview_data(users, track_mode=track_mode)
             logger.info("분석 완료: %d명 처리", len(users))
-            drive_filename = _build_drive_filename(leader, saved_date)
+            drive_filename = _build_drive_filename(leader, saved_date, room_name=room_name)
 
             response_payload = {
                 "xlsx_base64": base64.b64encode(xlsx_bytes).decode("ascii"),

@@ -706,6 +706,58 @@ class TestBuildOutputXlsx:
         assert ws.cell(2, 1).value is None
 
 
+class TestMetaSheet:
+    def test_meta_시트_생성_및_숨김(self):
+        from openpyxl import load_workbook
+        users = {"user1": {"dates": {"3/15"}, "emoji": "😀"}}
+        meta = {"room_name": "테스트방", "track_mode": "single", "schedule_type": "bible", "leader": "방장"}
+        result = build_output_xlsx(users, meta=meta)
+        wb = load_workbook(io.BytesIO(result))
+        assert "_메타" in wb.sheetnames
+        ws = wb["_메타"]
+        assert ws.sheet_state == "hidden"
+
+    def test_meta_시트_내용(self):
+        from openpyxl import load_workbook
+        users = {"user1": {"dates": {"3/15"}, "emoji": "😀"}}
+        meta = {"room_name": "꿀성경 교육국", "track_mode": "single", "schedule_type": "education", "leader": "길동"}
+        result = build_output_xlsx(users, meta=meta)
+        wb = load_workbook(io.BytesIO(result))
+        ws = wb["_메타"]
+        meta_dict = {}
+        for row in ws.iter_rows(min_col=1, max_col=2, values_only=True):
+            if row[0] is not None:
+                meta_dict[row[0]] = row[1]
+        assert meta_dict["room_name"] == "꿀성경 교육국"
+        assert meta_dict["track_mode"] == "single"
+        assert meta_dict["schedule_type"] == "education"
+        assert meta_dict["leader"] == "길동"
+
+    def test_meta_None__메타_시트_없음(self):
+        from openpyxl import load_workbook
+        users = {"user1": {"dates": {"3/15"}, "emoji": "😀"}}
+        result = build_output_xlsx(users)
+        wb = load_workbook(io.BytesIO(result))
+        assert "_메타" not in wb.sheetnames
+
+    def test_meta_빈_dict__메타_시트_없음(self):
+        from openpyxl import load_workbook
+        users = {"user1": {"dates": {"3/15"}, "emoji": "😀"}}
+        result = build_output_xlsx(users, meta={})
+        wb = load_workbook(io.BytesIO(result))
+        assert "_메타" not in wb.sheetnames
+
+    def test_meta_dual_모드__메타_시트_포함(self):
+        from openpyxl import load_workbook
+        users = {"user1": {"dates_old": {"2/2"}, "dates_new": {"2/3"}, "emoji": "😀"}}
+        meta = {"room_name": "투트랙방", "track_mode": "dual", "schedule_type": "dual", "leader": "방장"}
+        result = build_output_xlsx(users, track_mode="dual", meta=meta)
+        wb = load_workbook(io.BytesIO(result))
+        assert "_메타" in wb.sheetnames
+        assert "구약 진도표" in wb.sheetnames
+        assert "신약 진도표" in wb.sheetnames
+
+
 class TestAnalyzeChatLeadingTildeCatchup:
     def _make_csv(self, rows):
         output = io.StringIO(newline="")

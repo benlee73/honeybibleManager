@@ -9,20 +9,22 @@
 ```
 server.py              # 진입점 (HTTPServer)
 app/
-  handler.py           # HTTP 요청 처리, 파일 형식 감지
-  analyzer.py          # 채팅 분석, 결과 생성 (CSV/XLSX/preview)
+  handler.py           # HTTP 요청 처리, 파일 형식 감지, /merge 엔드포인트
+  analyzer.py          # 채팅 분석, 결과 생성 (CSV/XLSX/preview), 메타데이터 시트
+  merger.py            # 통합 진도표 로직 (Drive 파일 병합, 교육국 분류)
   image_builder.py     # 결과 PNG 이미지 생성 (4종 테마)
   txt_parser.py        # 모바일 TXT 내보내기 파싱
   schedule.py          # 진도표 날짜 생성 및 선택
   date_parser.py       # 메시지 날짜 파싱
   emoji.py             # 이모티콘 추출/정규화
-  drive_uploader.py    # Google Drive 업로드
+  drive_uploader.py    # Google Drive 업로드/목록/다운로드
   logger.py            # 로깅 설정
   fonts/               # 한글/이모지 폰트 번들
 tests/                 # 테스트
 scripts/
   get_google_token.py  # OAuth refresh token 발급
 public/                # 프론트엔드 (index.html, app.js, styles.css)
+education_config.json  # 교육국 멤버 분류 설정 (신약일독/미참여)
 ```
 
 ## 핵심 동작 흐름
@@ -35,6 +37,46 @@ public/                # 프론트엔드 (index.html, app.js, styles.css)
 6. 결과를 스타일 적용된 XLSX와 PNG 이미지로 변환하고, JSON 응답(xlsx_base64 + image_base64 + preview 데이터)으로 반환
 7. 프론트엔드에서 "이미지로 보기" 버튼 클릭 시 PNG 이미지를 `<img>` 태그로 표시 (모바일에서 길게 눌러 사진 저장 가능)
 8. (선택) "구글 드라이브 저장" 버튼 클릭 시 `POST /upload-drive`로 XLSX base64를 전송하여 Google Drive에 업로드
+9. (통합) "통합" 버튼 클릭 시 `POST /merge`로 Drive의 모든 방 결과를 병합하여 성경일독/신약일독 통합 진도표 생성
+
+## 통합 진도표 기능
+
+교육국 8명이 10개 카톡방을 관리하며, 각자 서버에서 분석한 XLSX를 Drive에 업로드한다. "통합" 버튼을 누르면 Drive에서 방별 최신 파일을 가져와 하나의 통합 XLSX로 병합한다.
+
+### 통합 흐름
+
+1. Drive 폴더에서 `꿀성경` XLSX 파일 목록 조회
+2. 파일명에서 방이름 추출 → 방별 최신 파일만 선택
+3. 각 파일의 `_메타` 시트에서 `schedule_type` 읽기
+4. 스케줄 유형에 따라 사용자를 성경일독/신약일독으로 분배:
+   - `bible` → 성경일독
+   - `nt` → 신약일독
+   - `dual` → 구약 날짜는 성경일독, 신약 날짜는 신약일독
+   - `education` → `education_config.json` 기반 분류
+   - `unknown` → 성경일독 기본값
+5. 중복 사용자는 날짜 합집합으로 병합
+6. "담당" 컬럼 포함 통합 XLSX + 미리보기 반환
+
+### 교육국 설정 (education_config.json)
+
+```json
+{
+  "nt_members": ["지혜", "찬영"],
+  "excluded_members": ["지혁"]
+}
+```
+
+### XLSX 메타데이터 시트
+
+분석 결과 XLSX에 숨겨진 `_메타` 시트가 포함된다:
+- `room_name`: 카톡방 이름
+- `track_mode`: single/dual
+- `schedule_type`: bible/nt/dual/education/unknown
+- `leader`: 방장 이름
+
+### Drive 파일명 형식
+
+`꿀성경_방장_YYYYMMDD_HHMM_방이름.xlsx` (방이름이 뒤에 추가됨)
 
 ## 분석 규칙 요약
 

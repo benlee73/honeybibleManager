@@ -114,6 +114,33 @@
         </div>
       </section>
 
+      <section class="panel merge-panel" id="mergePanel">
+        <h2 class="merge-title">통합 진도표</h2>
+        <p class="merge-desc">
+          구글 드라이브에 업로드된 모든 방의 결과를 합쳐 성경일독/신약일독 통합 진도표를 생성합니다.
+        </p>
+        <div class="actions">
+          <button class="primary" type="button" id="mergeButton">
+            통합
+          </button>
+          <div class="progress-bar" id="mergeProgressBar" hidden>
+            <div class="progress-fill" id="mergeProgressFill"></div>
+            <span class="progress-text" id="mergeProgressText">0%</span>
+          </div>
+        </div>
+        <div class="status" id="mergeStatus" data-state="idle" role="status" aria-live="polite">
+          <span class="status-dot" aria-hidden="true"></span>
+          <span class="status-text">통합 준비 완료.</span>
+          <span class="spinner" aria-hidden="true"></span>
+        </div>
+        <div class="merge-stats" id="mergeStats" hidden>
+          <span class="merge-stat" id="mergeStatRooms"></span>
+          <span class="merge-stat" id="mergeStatBible"></span>
+          <span class="merge-stat" id="mergeStatNt"></span>
+        </div>
+        <div class="merge-warnings" id="mergeWarnings" hidden></div>
+      </section>
+
       <section class="results" id="results" hidden>
         <div class="results-header">
           <h2>분석 결과</h2>
