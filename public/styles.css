@@ -444,6 +444,7 @@ button,
   background: transparent;
   color: var(--honey-3);
   border: 2px solid var(--honey-3);
+  border-radius: 14px;
   padding: 8px 28px;
   font-size: 14px;
   box-shadow: none;
@@ -479,7 +480,7 @@ body[data-theme="neon"] .icon-drive path {
   color: var(--ink-2);
   border: none;
   padding: 8px 12px;
-  font-size: 13px;
+  font-size: 14px;
   box-shadow: none;
   text-decoration: none;
 }

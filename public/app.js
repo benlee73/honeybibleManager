@@ -762,12 +762,6 @@ if (mergeButton) {
       downloadButton.classList.remove("is-disabled");
       downloadButton.setAttribute("aria-disabled", "false");
 
-      if (data.image_base64 && resultImage) {
-        currentImageBase64 = data.image_base64;
-        resultImage.src = `data:image/png;base64,${currentImageBase64}`;
-        if (imageToggle) imageToggle.hidden = false;
-      }
-
       if (data.xlsx_base64 && driveButton) {
         currentXlsxBase64 = data.xlsx_base64;
         currentDriveFilename = data.drive_filename || null;
