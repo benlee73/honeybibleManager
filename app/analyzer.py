@@ -16,8 +16,8 @@ MAX_DATES_PER_MESSAGE = 14
 ROW_PAD = 1  # 빈 첫 행
 COL_PAD = 1  # 빈 첫 열
 
-_STRIP_WORDS = ("광천", "누나", "오빠", "언니")
-_STRIP_SUFFIXES = ("형",)
+_STRIP_WORDS = ("광천", "누나", "오빠", "언니", " 형")
+_STRIP_SUFFIXES = ()
 
 
 def normalize_user_name(name: str) -> str:
