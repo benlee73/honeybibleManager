@@ -625,6 +625,24 @@ if (/Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent)) {
   switchGuideTab("mobile");
 }
 
+/* 패널 탭 전환 */
+const panelTabs = document.querySelector(".panel-tabs");
+if (panelTabs) {
+  panelTabs.querySelectorAll(".panel-tab").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const target = btn.dataset.tab;
+      panelTabs.dataset.active = target;
+      panelTabs.querySelectorAll(".panel-tab").forEach((b) => {
+        b.classList.toggle("is-active", b.dataset.tab === target);
+      });
+      const panel = panelTabs.closest(".panel");
+      panel.querySelectorAll(".panel-content").forEach((content) => {
+        content.hidden = content.dataset.panel !== target;
+      });
+    });
+  });
+}
+
 /* 통합 진도표 */
 const mergeButton = document.getElementById("mergeButton");
 const mergeStatus = document.getElementById("mergeStatus");

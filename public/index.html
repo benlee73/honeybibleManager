@@ -36,50 +36,82 @@
       </header>
 
       <section class="panel">
-        <form id="analyzeForm" class="stack">
-          <label class="file-input" for="csvFile">
-            <input
-              type="file"
-              id="csvFile"
-              name="csvFile"
-              accept=".csv,.txt,.zip,text/csv,text/plain,application/zip"
-            />
-            <span class="file-icon" aria-hidden="true">FILE</span>
-            <span class="file-body">
-              <span class="file-title">대화 파일 선택</span>
-              <span class="file-meta" id="fileMeta">선택된 파일 없음</span>
-            </span>
-            <span class="file-chip">CSV/TXT/ZIP</span>
-          </label>
+        <div class="panel-tabs">
+          <button class="panel-tab is-active" type="button" data-tab="analyze">파일 분석</button>
+          <button class="panel-tab" type="button" data-tab="merge">파일 통합</button>
+          <span class="panel-tab-indicator"></span>
+        </div>
 
-          <fieldset class="track-select">
-            <legend class="track-legend">분석 모드</legend>
-            <label class="track-option">
-              <input type="radio" name="trackMode" value="single" checked />
-              <span>일반 방</span>
+        <div class="panel-content" data-panel="analyze">
+          <form id="analyzeForm" class="stack">
+            <label class="file-input" for="csvFile">
+              <input
+                type="file"
+                id="csvFile"
+                name="csvFile"
+                accept=".csv,.txt,.zip,text/csv,text/plain,application/zip"
+              />
+              <span class="file-icon" aria-hidden="true">FILE</span>
+              <span class="file-body">
+                <span class="file-title">대화 파일 선택</span>
+                <span class="file-meta" id="fileMeta">선택된 파일 없음</span>
+              </span>
+              <span class="file-chip">CSV/TXT/ZIP</span>
             </label>
-            <label class="track-option">
-              <input type="radio" name="trackMode" value="dual" />
-              <span>투트랙 방</span>
-            </label>
-          </fieldset>
 
-          <div class="actions">
-            <button class="primary" type="submit" id="analyzeButton" disabled>
-              분석
-            </button>
-            <div class="progress-bar" id="progressBar" hidden>
-              <div class="progress-fill" id="progressFill"></div>
-              <span class="progress-text" id="progressText">0%</span>
+            <fieldset class="track-select">
+              <legend class="track-legend">분석 모드</legend>
+              <label class="track-option">
+                <input type="radio" name="trackMode" value="single" checked />
+                <span>일반 방</span>
+              </label>
+              <label class="track-option">
+                <input type="radio" name="trackMode" value="dual" />
+                <span>투트랙 방</span>
+              </label>
+            </fieldset>
+
+            <div class="actions">
+              <button class="primary" type="submit" id="analyzeButton" disabled>
+                분석
+              </button>
+              <div class="progress-bar" id="progressBar" hidden>
+                <div class="progress-fill" id="progressFill"></div>
+                <span class="progress-text" id="progressText">0%</span>
+              </div>
             </div>
-          </div>
 
-          <div class="status" id="status" data-state="idle" role="status" aria-live="polite">
-            <span class="status-dot" aria-hidden="true"></span>
-            <span class="status-text">파일 업로드를 기다리는 중입니다.</span>
-            <span class="spinner" id="spinner" aria-hidden="true"></span>
+            <div class="status" id="status" data-state="idle" role="status" aria-live="polite">
+              <span class="status-dot" aria-hidden="true"></span>
+              <span class="status-text">파일 업로드를 기다리는 중입니다.</span>
+              <span class="spinner" id="spinner" aria-hidden="true"></span>
+            </div>
+          </form>
+        </div>
+
+        <div class="panel-content" data-panel="merge" hidden>
+          <div class="stack">
+            <p class="panel-desc">구글 드라이브에 업로드된 모든 방의 결과를 합쳐<br/>성경일독/신약일독 통합 진도표를 생성합니다.</p>
+            <div class="actions">
+              <button class="primary" type="button" id="mergeButton">통합</button>
+              <div class="progress-bar" id="mergeProgressBar" hidden>
+                <div class="progress-fill" id="mergeProgressFill"></div>
+                <span class="progress-text" id="mergeProgressText">0%</span>
+              </div>
+            </div>
+            <div class="status" id="mergeStatus" data-state="idle" role="status" aria-live="polite" hidden>
+              <span class="status-dot" aria-hidden="true"></span>
+              <span class="status-text"></span>
+              <span class="spinner" aria-hidden="true"></span>
+            </div>
+            <div class="merge-stats" id="mergeStats" hidden>
+              <span class="merge-stat" id="mergeStatRooms"></span>
+              <span class="merge-stat" id="mergeStatBible"></span>
+              <span class="merge-stat" id="mergeStatNt"></span>
+            </div>
+            <div class="merge-warnings" id="mergeWarnings" hidden></div>
           </div>
-        </form>
+        </div>
       </section>
 
       <section class="panel note">
@@ -112,33 +144,6 @@
             <li>대화 파일 업로드</li>
           </ol>
         </div>
-      </section>
-
-      <section class="panel merge-panel" id="mergePanel">
-        <h2 class="merge-title">통합 진도표</h2>
-        <p class="merge-desc">
-          구글 드라이브에 업로드된 모든 방의 결과를 합쳐 성경일독/신약일독 통합 진도표를 생성합니다.
-        </p>
-        <div class="actions">
-          <button class="primary" type="button" id="mergeButton">
-            통합
-          </button>
-          <div class="progress-bar" id="mergeProgressBar" hidden>
-            <div class="progress-fill" id="mergeProgressFill"></div>
-            <span class="progress-text" id="mergeProgressText">0%</span>
-          </div>
-        </div>
-        <div class="status" id="mergeStatus" data-state="idle" role="status" aria-live="polite" hidden>
-          <span class="status-dot" aria-hidden="true"></span>
-          <span class="status-text"></span>
-          <span class="spinner" aria-hidden="true"></span>
-        </div>
-        <div class="merge-stats" id="mergeStats" hidden>
-          <span class="merge-stat" id="mergeStatRooms"></span>
-          <span class="merge-stat" id="mergeStatBible"></span>
-          <span class="merge-stat" id="mergeStatNt"></span>
-        </div>
-        <div class="merge-warnings" id="mergeWarnings" hidden></div>
       </section>
 
       <section class="results" id="results" hidden>
