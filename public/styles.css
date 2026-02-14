@@ -293,7 +293,7 @@ h1 {
   border-radius: 18px;
   border: 1px solid var(--line);
   background: var(--input-bg);
-  min-height: 92px;
+  min-height: 94px;
   display: flex;
   align-items: center;
 }
