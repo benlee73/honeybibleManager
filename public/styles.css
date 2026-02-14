@@ -237,31 +237,37 @@ h1 {
   pointer-events: none;
 }
 
-/* 패널 탭 토글 */
+/* 패널 탭 */
 .panel-tabs {
   position: relative;
   display: flex;
-  background: var(--input-bg);
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  padding: 3px;
-  margin-bottom: 20px;
+  gap: 0;
+  margin: -28px -28px 20px;
+  border-bottom: 1px solid var(--line);
 }
 
 .panel-tab {
   position: relative;
   z-index: 1;
   flex: 1;
-  padding: 8px 14px;
+  padding: 14px 14px 12px;
   font-family: var(--font-body);
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 600;
   color: var(--ink-2);
   background: transparent;
   border: none;
-  border-radius: 8px;
   cursor: pointer;
-  transition: color 0.2s ease;
+  transition: color 0.2s ease, background 0.2s ease;
+  border-radius: 0;
+}
+
+.panel-tab:first-child {
+  border-radius: 21px 0 0 0;
+}
+
+.panel-tab:hover:not(.is-active) {
+  background: var(--surface-strong);
 }
 
 .panel-tab.is-active {
@@ -270,12 +276,12 @@ h1 {
 
 .panel-tab-indicator {
   position: absolute;
-  top: 3px;
-  left: 3px;
-  width: calc(50% - 3px);
-  height: calc(100% - 6px);
-  background: var(--cream-2);
-  border-radius: 8px;
+  bottom: -1px;
+  left: 0;
+  width: 50%;
+  height: 2px;
+  background: var(--honey-2);
+  border-radius: 2px 2px 0 0;
   transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
   pointer-events: none;
 }
@@ -950,8 +956,7 @@ body[data-theme="bw"] .progress-text {
   mix-blend-mode: difference;
 }
 
-body[data-theme="bw"] .guide-toggle-indicator,
-body[data-theme="bw"] .panel-tab-indicator {
+body[data-theme="bw"] .guide-toggle-indicator {
   background: rgba(255, 255, 255, 0.12);
 }
 
@@ -1008,8 +1013,7 @@ body[data-theme="brew"] .file-input:focus-within {
   box-shadow: 0 0 0 3px rgba(190, 134, 45, 0.2);
 }
 
-body[data-theme="brew"] .guide-toggle-indicator,
-body[data-theme="brew"] .panel-tab-indicator {
+body[data-theme="brew"] .guide-toggle-indicator {
   background: rgba(190, 134, 45, 0.15);
 }
 
@@ -1072,8 +1076,7 @@ body[data-theme="neon"] .progress-text {
   text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
 }
 
-body[data-theme="neon"] .guide-toggle-indicator,
-body[data-theme="neon"] .panel-tab-indicator {
+body[data-theme="neon"] .guide-toggle-indicator {
   background: rgba(57, 255, 20, 0.1);
 }
 
