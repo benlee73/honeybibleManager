@@ -23,6 +23,7 @@ from app.handler import (
     _extract_csv_meta,
     _extract_leader,
     _extract_txt_from_zip,
+    _extract_zip_meta,
     extract_multipart_field,
     extract_multipart_file,
 )
@@ -285,6 +286,37 @@ class TestExtractCsvMeta:
 
     def test_None_파일명__None_반환(self):
         room, date = _extract_csv_meta(None)
+        assert room is None
+        assert date is None
+
+
+class TestExtractZipMeta:
+    def test_영문_ZIP_파일명__방이름_날짜_추출(self):
+        room, date = _extract_zip_meta(
+            "Kakaotalk_Chat_📖26 성경일독 PART1🙏🏻_20260213_184248.zip"
+        )
+        assert room == "📖26 성경일독 PART1🙏🏻"
+        assert date == "2026/02/13-18:42"
+
+    def test_한국어_ZIP_파일명__방이름_날짜_추출(self):
+        room, date = _extract_zip_meta(
+            "KakaoTalk_Chat_꿀성경 2026 성경일독 part1_20260210_121623.zip"
+        )
+        assert room == "꿀성경 2026 성경일독 part1"
+        assert date == "2026/02/10-12:16"
+
+    def test_패턴불일치__None_반환(self):
+        room, date = _extract_zip_meta("random_file.zip")
+        assert room is None
+        assert date is None
+
+    def test_None_파일명__None_반환(self):
+        room, date = _extract_zip_meta(None)
+        assert room is None
+        assert date is None
+
+    def test_빈_파일명__None_반환(self):
+        room, date = _extract_zip_meta("")
         assert room is None
         assert date is None
 

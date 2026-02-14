@@ -172,3 +172,107 @@ class TestExtractChatMeta:
         meta = extract_chat_meta(text)
         assert meta["room_name"] == "꿀성경 - 교육국"
         assert meta["saved_date"] == "2026/02/10-12:16"
+
+
+class TestParseTxtEnglish:
+    def test_영문_사용자_메시지_파싱(self):
+        text = (
+            "Date Saved : Feb 13, 2026 at 18:42\r\n"
+            "Feb 1, 2026 at 20:35, 김예슬 : 2/1🐷\r\n"
+        )
+        rows = parse_txt(text)
+        assert len(rows) == 1
+        assert rows[0] == ("김예슬", "2/1🐷")
+
+    def test_영문_시스템_메시지_스킵(self):
+        text = (
+            "Date Saved : Feb 13, 2026 at 18:42\r\n"
+            "Feb 1, 2026 at 20:29: 홍길동 invited 김철수.\r\n"
+            "Feb 1, 2026 at 20:35, 김예슬 : 2/1🐷\r\n"
+        )
+        rows = parse_txt(text)
+        assert len(rows) == 1
+        assert rows[0][0] == "김예슬"
+
+    def test_영문_날짜_헤더_스킵(self):
+        text = (
+            "Date Saved : Feb 13, 2026 at 18:42\r\n"
+            "Sunday, February 1, 2026\r\n"
+            "Feb 2, 2026 at 7:33, 홍길동 : 2/2🐷\r\n"
+        )
+        rows = parse_txt(text)
+        assert len(rows) == 1
+
+    def test_영문_파일_헤더_스킵(self):
+        text = (
+            "Talk_2026.2.13 18:42-1.txt\r\n"
+            "Date Saved : Feb 13, 2026 at 18:42\r\n"
+            "\r\n"
+            "Feb 2, 2026 at 7:33, 홍길동 : 2/2🐷\r\n"
+        )
+        rows = parse_txt(text)
+        assert len(rows) == 1
+        assert rows[0] == ("홍길동", "2/2🐷")
+
+    def test_영문_멀티라인_메시지(self):
+        text = (
+            "Date Saved : Feb 13, 2026 at 18:42\r\n"
+            "Feb 1, 2026 at 20:29, 홍길동 : 첫줄\r\n"
+            "둘째줄\r\n"
+            "셋째줄\r\n"
+            "Feb 2, 2026 at 7:33, 김철수 : 단일줄\r\n"
+        )
+        rows = parse_txt(text)
+        assert len(rows) == 2
+        assert rows[0] == ("홍길동", "첫줄\n둘째줄\n셋째줄")
+        assert rows[1] == ("김철수", "단일줄")
+
+    def test_영문_종합_시나리오(self):
+        text = (
+            "Talk_2026.2.13 18:42-1.txt\r\n"
+            "Date Saved : Feb 13, 2026 at 18:42\r\n"
+            "\r\n"
+            "Sunday, February 1, 2026\r\n"
+            "Feb 1, 2026 at 20:26: 홍길동님이 방장이 되었습니다.\r\n"
+            "Feb 1, 2026 at 20:29, 홍길동 : 공지사항\r\n"
+            "여러 줄 안내문\r\n"
+            "\r\n"
+            "Monday, February 2, 2026\r\n"
+            "Feb 2, 2026 at 7:33, 김철수 : 2/2🐷\r\n"
+            "Feb 2, 2026 at 8:00, 이영희 : 2/2🦊\r\n"
+        )
+        rows = parse_txt(text)
+        assert len(rows) == 3
+        assert rows[0] == ("홍길동", "공지사항\n여러 줄 안내문")
+        assert rows[1] == ("김철수", "2/2🐷")
+        assert rows[2] == ("이영희", "2/2🦊")
+
+
+class TestExtractChatMetaEnglish:
+    def test_영문_저장날짜_추출(self):
+        text = (
+            "Date Saved : Feb 13, 2026 at 18:42\r\n"
+            "\r\n"
+            "Sunday, February 1, 2026\r\n"
+        )
+        meta = extract_chat_meta(text)
+        assert meta["room_name"] is None
+        assert meta["saved_date"] == "2026/02/13-18:42"
+
+    def test_영문_방이름_없음__None_반환(self):
+        text = (
+            "Date Saved : Feb 13, 2026 at 18:42\r\n"
+            "Feb 1, 2026 at 20:35, 김예슬 : 메시지\r\n"
+        )
+        meta = extract_chat_meta(text)
+        assert meta["room_name"] is None
+
+    def test_영문_오전시간_추출(self):
+        text = "Date Saved : Jan 5, 2026 at 9:05\r\n"
+        meta = extract_chat_meta(text)
+        assert meta["saved_date"] == "2026/01/05-09:05"
+
+    def test_영문_12월_추출(self):
+        text = "Date Saved : Dec 25, 2025 at 0:00\r\n"
+        meta = extract_chat_meta(text)
+        assert meta["saved_date"] == "2025/12/25-00:00"

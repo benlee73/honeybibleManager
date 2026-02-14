@@ -4,6 +4,8 @@ from app.logger import get_logger
 
 logger = get_logger("txt_parser")
 
+# ── 한국어 정규식 ──
+
 # TXT 헤더 첫 줄: "XXX 님과 카카오톡 대화"
 _ROOM_NAME_RE = re.compile(r"^(.+?)\s*님과 카카오톡 대화$")
 
@@ -27,8 +29,52 @@ _DATE_HEADER_RE = re.compile(
     r"^\d{4}년\s*\d{1,2}월\s*\d{1,2}일\s*\S+요일$"
 )
 
+# ── 영문 정규식 ──
+
+_EN_MONTHS = r"(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)"
+
+_EN_MONTH_MAP = {
+    "Jan": 1, "Feb": 2, "Mar": 3, "Apr": 4, "May": 5, "Jun": 6,
+    "Jul": 7, "Aug": 8, "Sep": 9, "Oct": 10, "Nov": 11, "Dec": 12,
+}
+
+# Date Saved : Feb 13, 2026 at 18:42
+_EN_SAVED_DATE_RE = re.compile(
+    rf"^Date Saved\s*:\s*({_EN_MONTHS})\s+(\d{{1,2}}),\s*(\d{{4}})\s+at\s+(\d{{1,2}}):(\d{{2}})"
+)
+
+# Sunday, February 1, 2026
+_EN_DATE_HEADER_RE = re.compile(
+    r"^(?:Sunday|Monday|Tuesday|Wednesday|Thursday|Friday|Saturday),\s+"
+    r"(?:January|February|March|April|May|June|July|August|September|October|November|December)\s+"
+    r"\d{1,2},\s*\d{4}$"
+)
+
+# Feb 1, 2026 at 20:35, 김예슬 : 메시지
+_EN_USER_MSG_RE = re.compile(
+    rf"^{_EN_MONTHS}\s+\d{{1,2}},\s*\d{{4}}\s+at\s+\d{{1,2}}:\d{{2}},\s*(.+?)\s*:\s*(.*)"
+)
+
+# Feb 1, 2026 at 20:29: 시스템텍스트 (쉼표 없이 콜론)
+_EN_SYSTEM_MSG_RE = re.compile(
+    rf"^{_EN_MONTHS}\s+\d{{1,2}},\s*\d{{4}}\s+at\s+\d{{1,2}}:\d{{2}}:\s"
+)
+
+# ── 공용 ──
+
 # 파일 헤더 또는 저장 날짜 줄
-_FILE_HEADER_RE = re.compile(r"^(Talk_|저장한 날짜)")
+_FILE_HEADER_RE = re.compile(r"^(Talk_|저장한 날짜|Date Saved)")
+
+
+def _detect_language(lines):
+    """앞쪽 10줄을 확인하여 'en' 또는 'ko'를 반환한다."""
+    for line in lines[:10]:
+        stripped = line.strip()
+        if stripped.startswith("Date Saved"):
+            return "en"
+        if stripped.startswith("저장한 날짜"):
+            return "ko"
+    return "ko"
 
 
 def extract_chat_meta(text):
@@ -39,6 +85,7 @@ def extract_chat_meta(text):
               saved_date 형식: "YYYY/MM/DD-HH:MM"
     """
     lines = text.replace("\r\n", "\n").replace("\r", "\n").split("\n")
+    lang = _detect_language(lines)
     room_name = None
     saved_date = None
 
@@ -47,23 +94,33 @@ def extract_chat_meta(text):
         if not stripped:
             continue
 
-        if room_name is None:
+        # 방이름: 한국어 형식에만 존재 (영문 TXT에는 방이름 헤더 없음)
+        if room_name is None and lang == "ko":
             m = _ROOM_NAME_RE.match(stripped)
             if m:
                 room_name = m.group(1).strip()
                 continue
 
         if saved_date is None:
-            m = _SAVED_DATE_RE.match(stripped)
-            if m:
-                year, month, day = m.group(1), m.group(2), m.group(3)
-                ampm, hour, minute = m.group(4), int(m.group(5)), m.group(6)
-                if ampm == "오후" and hour != 12:
-                    hour += 12
-                elif ampm == "오전" and hour == 12:
-                    hour = 0
-                saved_date = f"{year}/{int(month):02d}/{int(day):02d}-{hour:02d}:{minute}"
-                continue
+            if lang == "en":
+                m = _EN_SAVED_DATE_RE.match(stripped)
+                if m:
+                    month_name, day, year = m.group(1), m.group(2), m.group(3)
+                    hour, minute = int(m.group(4)), m.group(5)
+                    month = _EN_MONTH_MAP[month_name]
+                    saved_date = f"{year}/{month:02d}/{int(day):02d}-{hour:02d}:{minute}"
+                    continue
+            else:
+                m = _SAVED_DATE_RE.match(stripped)
+                if m:
+                    year, month, day = m.group(1), m.group(2), m.group(3)
+                    ampm, hour, minute = m.group(4), int(m.group(5)), m.group(6)
+                    if ampm == "오후" and hour != 12:
+                        hour += 12
+                    elif ampm == "오전" and hour == 12:
+                        hour = 0
+                    saved_date = f"{year}/{int(month):02d}/{int(day):02d}-{hour:02d}:{minute}"
+                    continue
 
         # 방이름과 저장날짜를 모두 찾았으면 조기 종료
         if room_name is not None and saved_date is not None:
@@ -75,6 +132,17 @@ def extract_chat_meta(text):
 def parse_txt(text):
     """카카오톡 모바일 TXT 내보내기를 파싱하여 (user, message) 튜플 리스트를 반환한다."""
     lines = text.replace("\r\n", "\n").replace("\r", "\n").split("\n")
+    lang = _detect_language(lines)
+
+    if lang == "en":
+        date_header_re = _EN_DATE_HEADER_RE
+        user_msg_re = _EN_USER_MSG_RE
+        system_msg_re = _EN_SYSTEM_MSG_RE
+    else:
+        date_header_re = _DATE_HEADER_RE
+        user_msg_re = _USER_MSG_RE
+        system_msg_re = _SYSTEM_MSG_RE
+
     rows = []
     current_user = None
     current_message = None
@@ -93,11 +161,11 @@ def parse_txt(text):
             skip_header += 1
             continue
 
-        if _DATE_HEADER_RE.match(stripped):
+        if date_header_re.match(stripped):
             skip_date_header += 1
             continue
 
-        user_match = _USER_MSG_RE.match(stripped)
+        user_match = user_msg_re.match(stripped)
         if user_match:
             if current_user is not None:
                 rows.append((current_user, current_message))
@@ -105,7 +173,7 @@ def parse_txt(text):
             current_message = user_match.group(2).strip()
             continue
 
-        if _SYSTEM_MSG_RE.match(stripped):
+        if system_msg_re.match(stripped):
             skip_system += 1
             if current_user is not None:
                 rows.append((current_user, current_message))
@@ -122,9 +190,9 @@ def parse_txt(text):
         rows.append((current_user, current_message))
 
     logger.info(
-        "TXT 파싱: 전체 %d줄, 사용자 메시지 %d건 (파일헤더 %d, 날짜헤더 %d, "
+        "TXT 파싱 (%s): 전체 %d줄, 사용자 메시지 %d건 (파일헤더 %d, 날짜헤더 %d, "
         "시스템메시지 %d, 멀티라인연결 %d)",
-        len(lines), len(rows), skip_header, skip_date_header,
+        lang, len(lines), len(rows), skip_header, skip_date_header,
         skip_system, multiline_count,
     )
 

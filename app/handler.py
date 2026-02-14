@@ -39,6 +39,11 @@ _CSV_FILENAME_RE = re.compile(
     r"KakaoTalk_Chat_(.+)_(\d{4})-(\d{2})-(\d{2})-(\d{2})-(\d{2})"
 )
 
+# ZIP 파일명 패턴: Kakaotalk_Chat_방이름_YYYYMMDD_HHMMSS.zip
+_ZIP_FILENAME_RE = re.compile(
+    r"[Kk]akao[Tt]alk_Chat_(.+)_(\d{4})(\d{2})(\d{2})_(\d{2})(\d{2})"
+)
+
 
 _LEADER_KEYWORD = "꿀성경 진행 방식 안내"
 
@@ -121,6 +126,22 @@ def _extract_csv_meta(filename):
     if not filename:
         return None, None
     m = _CSV_FILENAME_RE.search(filename)
+    if not m:
+        return None, None
+    room_name = m.group(1)
+    saved_date = f"{m.group(2)}/{m.group(3)}/{m.group(4)}-{m.group(5)}:{m.group(6)}"
+    return room_name, saved_date
+
+
+def _extract_zip_meta(filename):
+    """ZIP 파일명에서 방 이름과 내보내기 시점을 추출한다.
+
+    Returns:
+        tuple: (room_name, saved_date) — 각각 str|None
+    """
+    if not filename:
+        return None, None
+    m = _ZIP_FILENAME_RE.search(filename)
     if not m:
         return None, None
     room_name = m.group(1)
@@ -506,6 +527,13 @@ class HoneyBibleHandler(BaseHTTPRequestHandler):
                 meta = extract_chat_meta(text)
                 room_name = meta["room_name"]
                 saved_date = meta["saved_date"]
+                # ZIP 파일명 폴백 (한국어·영어 ZIP 모두 TXT에 방이름 없음)
+                if not room_name or not saved_date:
+                    zip_room, zip_date = _extract_zip_meta(filename)
+                    if not room_name:
+                        room_name = zip_room
+                    if not saved_date:
+                        saved_date = zip_date
             elif file_format == "txt":
                 text = decode_payload(file_bytes)
                 rows = parse_txt(text)
