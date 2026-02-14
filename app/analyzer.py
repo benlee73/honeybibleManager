@@ -13,6 +13,9 @@ logger = get_logger("analyzer")
 
 MAX_DATES_PER_MESSAGE = 14
 
+ROW_PAD = 1  # 빈 첫 행
+COL_PAD = 1  # 빈 첫 열
+
 _STRIP_WORDS = ("광천", "누나", "오빠", "언니")
 _STRIP_SUFFIXES = ("형",)
 
@@ -432,41 +435,119 @@ def build_preview_data(users, track_mode="single"):
     return headers, rows
 
 
-def _apply_sheet_style(ws, headers, rows):
-    header_fill = PatternFill(start_color="FFF6E2", end_color="FFF6E2", fill_type="solid")
-    header_font = Font(name="맑은 고딕", bold=True, size=11, color="4A2D14")
-    header_border = Border(bottom=Side(style="medium", color="C46B12"))
-
-    body_font = Font(name="맑은 고딕", size=11, color="2A1A08")
-    mark_font = Font(name="맑은 고딕", bold=True, size=11, color="E39B2F")
-    row_border = Border(bottom=Side(style="thin", color="D4C4A8"))
+def _apply_sheet_style(ws, headers, rows, leader_col=None, title=None):
+    header_fill = PatternFill(start_color="FFF3CD", end_color="FFF3CD", fill_type="solid")
+    header_font = Font(name="맑은 고딕", size=11)
+    body_font = Font(name="맑은 고딕", size=11)
+    mark_font = Font(name="맑은 고딕", size=11)
     center_align = Alignment(horizontal="center", vertical="center")
+    name_fill = PatternFill(start_color="FFF8E1", end_color="FFF8E1", fill_type="solid")
 
-    for col_idx, value in enumerate(headers, start=1):
-        cell = ws.cell(row=1, column=col_idx, value=value)
+    thin = Side(style="thin")
+    medium = Side(style="medium")
+
+    R = ROW_PAD
+    C = COL_PAD
+    first_col = 1 + C
+    last_col = len(headers) + C
+
+    name_col = (headers.index("이름") + 1 + C) if "이름" in headers else first_col
+    _NON_DATE = {"이름", "이모티콘", "담당", "트랙"}
+    date_start_col = sum(1 for h in headers if h in _NON_DATE) + 1 + C
+    leader_col_ws = (leader_col + C) if leader_col else None
+
+    # 패딩 행/열 크기
+    ws.column_dimensions['A'].width = 2
+    ws.row_dimensions[1].height = 6
+
+    # 타이틀 행 오프셋
+    if title:
+        title_row = 1 + R
+        header_row = 2 + R
+        data_start = 3 + R
+        freeze = "B4"
+    else:
+        header_row = 1 + R
+        data_start = 2 + R
+        freeze = "B3"
+
+    last_row = data_start + len(rows) - 1 if rows else header_row
+
+    # 담당자 그룹 경계 행 (leader_col이 있을 때만)
+    leader_boundary_rows = set()
+    if leader_col and rows:
+        for i in range(len(rows) - 1):
+            lc = rows[i][leader_col - 1] if (leader_col - 1) < len(rows[i]) else ""
+            ln = rows[i + 1][leader_col - 1] if (leader_col - 1) < len(rows[i + 1]) else ""
+            if lc != ln:
+                leader_boundary_rows.add(data_start + i)
+
+    # 타이틀 행
+    if title:
+        ws.merge_cells(start_row=title_row, start_column=first_col,
+                        end_row=title_row, end_column=last_col)
+        title_cell = ws.cell(row=title_row, column=first_col, value=title)
+        title_cell.font = Font(name="맑은 고딕", size=20)
+        title_cell.fill = header_fill
+        title_cell.alignment = center_align
+        ws.row_dimensions[title_row].height = 60
+        # 타이틀 행 외곽 medium
+        title_cell.border = Border(top=medium, bottom=medium, left=medium, right=medium)
+        for c in range(first_col + 1, last_col + 1):
+            cell = ws.cell(row=title_row, column=c)
+            cell.fill = header_fill
+            cell.alignment = center_align
+            cell.border = Border(
+                top=medium,
+                bottom=medium,
+                left=thin,
+                right=medium if c == last_col else thin,
+            )
+
+    # 헤더 행
+    ws.row_dimensions[header_row].height = 28
+    for col_idx, value in enumerate(headers, start=first_col):
+        cell = ws.cell(row=header_row, column=col_idx, value=value)
         cell.fill = header_fill
         cell.font = header_font
-        cell.border = header_border
         cell.alignment = center_align
 
-    for row_idx, row_data in enumerate(rows, start=2):
-        for col_idx, value in enumerate(row_data, start=1):
+    # 데이터 행
+    for row_idx, row_data in enumerate(rows, start=data_start):
+        for col_idx, value in enumerate(row_data, start=first_col):
             cell = ws.cell(row=row_idx, column=col_idx, value=value)
-            if value == "O":
-                cell.font = mark_font
-            else:
-                cell.font = body_font
-            cell.border = row_border
+            cell.font = mark_font if value == "O" else body_font
             cell.alignment = center_align
+            if col_idx == name_col or (leader_col_ws and col_idx == leader_col_ws):
+                cell.fill = name_fill
 
-    ws.column_dimensions["A"].width = 16
-    ws.column_dimensions["B"].width = 8
-    date_start_col = 3
-    for col_idx in range(date_start_col, len(headers) + 1):
-        col_letter = ws.cell(row=1, column=col_idx).column_letter
-        ws.column_dimensions[col_letter].width = 7
+    # 풀 그리드 테두리
+    for r in range(header_row, last_row + 1):
+        for c in range(first_col, last_col + 1):
+            cell = ws.cell(row=r, column=c)
+            top_side = medium if r == header_row else thin
+            bottom_side = (
+                medium if r in (header_row, last_row) or r in leader_boundary_rows
+                else thin
+            )
+            left_side = medium if c in (first_col, date_start_col) else thin
+            right_side = medium if c == last_col else thin
+            cell.border = Border(top=top_side, bottom=bottom_side,
+                                 left=left_side, right=right_side)
 
-    ws.freeze_panes = "A2"
+    # 열 너비
+    for col_idx, header in enumerate(headers, start=first_col):
+        col_letter = ws.cell(row=header_row, column=col_idx).column_letter
+        if header == "이름":
+            ws.column_dimensions[col_letter].width = 16
+        elif header == "이모티콘":
+            ws.column_dimensions[col_letter].width = 8
+        elif header == "담당":
+            ws.column_dimensions[col_letter].width = 10
+        else:
+            ws.column_dimensions[col_letter].width = 7
+
+    ws.freeze_panes = freeze
 
 
 def build_dual_preview_data(users):

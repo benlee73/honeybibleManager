@@ -4,8 +4,9 @@ import os
 import re
 
 from openpyxl import Workbook, load_workbook
+from openpyxl.styles import Border, Side
 
-from app.analyzer import _apply_sheet_style, sort_dates
+from app.analyzer import COL_PAD, ROW_PAD, _apply_sheet_style, sort_dates
 from app.drive_uploader import download_drive_file, list_drive_files
 from app.logger import get_logger
 
@@ -110,6 +111,17 @@ def read_meta_from_xlsx(xlsx_bytes):
         return None
 
 
+def _find_header_row(ws):
+    """'이름' 컬럼을 찾아 (rows_iter, trimmed_header, col_offset) 반환."""
+    rows_iter = ws.iter_rows(values_only=True)
+    for row in rows_iter:
+        values = list(row)
+        for i, v in enumerate(values):
+            if v == "이름":
+                return rows_iter, values[i:], i
+    return iter([]), None, 0
+
+
 def read_users_from_xlsx(xlsx_bytes, track_mode):
     """XLSX 바이트에서 사용자 데이터를 추출한다.
 
@@ -129,22 +141,22 @@ def read_users_from_xlsx(xlsx_bytes, track_mode):
             if sheet_name not in wb.sheetnames:
                 continue
             ws = wb[sheet_name]
-            rows_iter = ws.iter_rows(values_only=True)
-            header = next(rows_iter, None)
+            rows_iter, header, col_offset = _find_header_row(ws)
             if not header:
                 continue
-            # 날짜 컬럼: 인덱스 2부터 (이름, 이모티콘, 날짜...)
+            # 날짜 컬럼: "이름", "이모티콘" 뒤부터
             date_cols = list(header[2:])
             for row in rows_iter:
-                if not row or not row[0]:
+                if not row or col_offset >= len(row) or not row[col_offset]:
                     continue
-                name = str(row[0])
-                emoji = str(row[1]) if row[1] else ""
+                name = str(row[col_offset])
+                emoji = str(row[col_offset + 1]) if (col_offset + 1) < len(row) and row[col_offset + 1] else ""
                 entry = users.setdefault(name, {"dates_old": set(), "dates_new": set(), "emoji": emoji})
                 if not entry["emoji"] and emoji:
                     entry["emoji"] = emoji
                 for i, date_val in enumerate(date_cols):
-                    cell_val = row[2 + i] if (2 + i) < len(row) else None
+                    cell_idx = col_offset + 2 + i
+                    cell_val = row[cell_idx] if cell_idx < len(row) else None
                     if cell_val == "O" and date_val:
                         entry[date_key].add(str(date_val))
     else:
@@ -153,20 +165,20 @@ def read_users_from_xlsx(xlsx_bytes, track_mode):
             # 첫 번째 시트 사용 (호환성)
             sheet_name = wb.sheetnames[0]
         ws = wb[sheet_name]
-        rows_iter = ws.iter_rows(values_only=True)
-        header = next(rows_iter, None)
+        rows_iter, header, col_offset = _find_header_row(ws)
         if header:
             date_cols = list(header[2:])
             for row in rows_iter:
-                if not row or not row[0]:
+                if not row or col_offset >= len(row) or not row[col_offset]:
                     continue
-                name = str(row[0])
-                emoji = str(row[1]) if row[1] else ""
+                name = str(row[col_offset])
+                emoji = str(row[col_offset + 1]) if (col_offset + 1) < len(row) and row[col_offset + 1] else ""
                 entry = users.setdefault(name, {"dates": set(), "emoji": emoji})
                 if not entry["emoji"] and emoji:
                     entry["emoji"] = emoji
                 for i, date_val in enumerate(date_cols):
-                    cell_val = row[2 + i] if (2 + i) < len(row) else None
+                    cell_idx = col_offset + 2 + i
+                    cell_val = row[cell_idx] if cell_idx < len(row) else None
                     if cell_val == "O" and date_val:
                         entry["dates"].add(str(date_val))
 
@@ -234,7 +246,7 @@ def merge_files():
     if not list_result["success"]:
         return list_result
 
-    all_files = list_result["files"]
+    all_files = [f for f in list_result["files"] if "통합" not in f.get("name", "")]
     if not all_files:
         return {"success": False, "message": "Drive 폴더에 꿀성경 파일이 없습니다."}
 
@@ -338,25 +350,25 @@ def build_merged_xlsx(bible_users, nt_users):
     # 성경일독 시트
     ws_bible = wb.active
     ws_bible.title = "성경일독 진도표"
-    _build_merged_sheet(ws_bible, bible_users)
+    _build_merged_sheet(ws_bible, bible_users, title="2026 꿀성경 통합 진도표")
 
     # 신약일독 시트
     ws_nt = wb.create_sheet(title="신약일독 진도표")
-    _build_merged_sheet(ws_nt, nt_users)
+    _build_merged_sheet(ws_nt, nt_users, title="2026 꿀성경 통합 진도표")
 
     buf = io.BytesIO()
     wb.save(buf)
     return buf.getvalue()
 
 
-def _build_merged_sheet(ws, users):
+def _build_merged_sheet(ws, users, title=None):
     """통합 시트 하나를 생성한다."""
     all_dates = set()
     for data in users.values():
         all_dates.update(data["dates"])
     all_dates_sorted = sort_dates(all_dates)
 
-    headers = ["이름", "이모티콘", "담당"] + all_dates_sorted
+    headers = ["담당", "이름", "이모티콘"] + all_dates_sorted
 
     # 사용자 정렬: 담당 → 이름 순
     sorted_users = sorted(users.keys(), key=lambda u: (users[u].get("leader", ""), u))
@@ -366,14 +378,43 @@ def _build_merged_sheet(ws, users):
         data = users[user]
         if not data["dates"]:
             continue
-        row = [user, data["emoji"], data.get("leader", "")]
+        row = [data.get("leader", ""), user, data["emoji"]]
         row.extend("O" if d in data["dates"] else "" for d in all_dates_sorted)
         rows.append(row)
 
-    _apply_sheet_style(ws, headers, rows)
+    _apply_sheet_style(ws, headers, rows, leader_col=1, title=title)
 
-    # 담당 컬럼 너비 설정
-    ws.column_dimensions["C"].width = 10
+    # 같은 담당자의 셀 병합
+    data_start = (3 if title else 2) + ROW_PAD
+    leader_col_ws = 1 + COL_PAD
+    if rows:
+        merge_start = data_start
+        prev_leader = rows[0][0]
+        for i in range(1, len(rows)):
+            current_leader = rows[i][0]
+            if current_leader != prev_leader:
+                merge_end = data_start + i - 1
+                if merge_end > merge_start:
+                    ws.merge_cells(start_row=merge_start, start_column=leader_col_ws,
+                                   end_row=merge_end, end_column=leader_col_ws)
+                merge_start = data_start + i
+                prev_leader = current_leader
+        merge_end = data_start + len(rows) - 1
+        if merge_end > merge_start:
+            ws.merge_cells(start_row=merge_start, start_column=leader_col_ws,
+                           end_row=merge_end, end_column=leader_col_ws)
+
+        # 병합 후 담당 열 그룹 경계선 복원
+        medium_side = Side(style="medium")
+        for rng in list(ws.merged_cells.ranges):
+            if rng.min_col == leader_col_ws:
+                cell = ws.cell(row=rng.min_row, column=leader_col_ws)
+                cell.border = Border(
+                    top=cell.border.top,
+                    bottom=medium_side,
+                    left=cell.border.left,
+                    right=cell.border.right,
+                )
 
 
 def build_merged_preview(bible_users, nt_users):
@@ -389,7 +430,7 @@ def build_merged_preview(bible_users, nt_users):
         all_dates.update(data["dates"])
     all_dates_sorted = sort_dates(all_dates)
 
-    headers = ["이름", "이모티콘", "담당", "트랙"] + all_dates_sorted
+    headers = ["담당", "이름", "이모티콘", "트랙"] + all_dates_sorted
 
     rows = []
     # 성경일독
@@ -397,7 +438,7 @@ def build_merged_preview(bible_users, nt_users):
         data = bible_users[user]
         if not data["dates"]:
             continue
-        row = [user, data["emoji"], data.get("leader", ""), "성경일독"]
+        row = [data.get("leader", ""), user, data["emoji"], "성경일독"]
         row.extend("O" if d in data["dates"] else "" for d in all_dates_sorted)
         rows.append(row)
 
@@ -406,7 +447,7 @@ def build_merged_preview(bible_users, nt_users):
         data = nt_users[user]
         if not data["dates"]:
             continue
-        row = [user, data["emoji"], data.get("leader", ""), "신약일독"]
+        row = [data.get("leader", ""), user, data["emoji"], "신약일독"]
         row.extend("O" if d in data["dates"] else "" for d in all_dates_sorted)
         rows.append(row)
 

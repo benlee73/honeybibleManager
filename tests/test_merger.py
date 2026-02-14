@@ -227,11 +227,12 @@ class TestBuildMergedXlsx:
         wb = load_workbook(io.BytesIO(xlsx_bytes))
         ws = wb["성경일독 진도표"]
 
-        assert ws.cell(1, 1).value == "이름"
-        assert ws.cell(1, 2).value == "이모티콘"
-        assert ws.cell(1, 3).value == "담당"
-        assert ws.cell(2, 1).value == "user1"
-        assert ws.cell(2, 3).value == "방장A"
+        # row 2 = 타이틀, row 3 = 헤더, row 4 = 데이터 (패딩 적용)
+        assert ws.cell(3, 2).value == "담당"
+        assert ws.cell(3, 3).value == "이름"
+        assert ws.cell(3, 4).value == "이모티콘"
+        assert ws.cell(4, 2).value == "방장A"
+        assert ws.cell(4, 3).value == "user1"
 
     def test_담당별_정렬(self):
         bible_users = {
@@ -242,16 +243,17 @@ class TestBuildMergedXlsx:
         wb = load_workbook(io.BytesIO(xlsx_bytes))
         ws = wb["성경일독 진도표"]
 
-        # 방장A가 먼저
-        assert ws.cell(2, 3).value == "방장A"
-        assert ws.cell(3, 3).value == "방장B"
+        # row 2 = 타이틀, row 4~ = 데이터 (방장A가 먼저, 패딩 적용)
+        assert ws.cell(4, 2).value == "방장A"
+        assert ws.cell(5, 2).value == "방장B"
 
     def test_빈_사용자__헤더만(self):
         xlsx_bytes = build_merged_xlsx({}, {})
         wb = load_workbook(io.BytesIO(xlsx_bytes))
         ws = wb["성경일독 진도표"]
-        assert ws.cell(1, 1).value == "이름"
-        assert ws.cell(2, 1).value is None
+        # row 2 = 타이틀, row 3 = 헤더, row 4 = 데이터 없음 (패딩 적용)
+        assert ws.cell(3, 2).value == "담당"
+        assert ws.cell(4, 2).value is None
 
 
 class TestBuildMergedPreview:

@@ -537,10 +537,10 @@ class TestBuildOutputXlsx:
         result = build_output_xlsx(users)
         wb = load_workbook(io.BytesIO(result))
         ws = wb.active
-        assert ws.cell(1, 1).value == "이름"
-        assert ws.cell(1, 2).value == "이모티콘"
-        assert ws.cell(1, 3).value == "2/2"
-        assert ws.cell(1, 4).value == "2/3"
+        assert ws.cell(2, 2).value == "이름"
+        assert ws.cell(2, 3).value == "이모티콘"
+        assert ws.cell(2, 4).value == "2/2"
+        assert ws.cell(2, 5).value == "2/3"
 
     def test_build_output_xlsx__데이터_행_O_마크(self):
         from openpyxl import load_workbook
@@ -550,9 +550,9 @@ class TestBuildOutputXlsx:
         result = build_output_xlsx(users)
         wb = load_workbook(io.BytesIO(result))
         ws = wb.active
-        assert ws.cell(2, 1).value == "user1"
-        assert ws.cell(2, 2).value == "😀"
-        assert ws.cell(2, 3).value == "O"
+        assert ws.cell(3, 2).value == "user1"
+        assert ws.cell(3, 3).value == "😀"
+        assert ws.cell(3, 4).value == "O"
 
     def test_build_output_xlsx__헤더_스타일(self):
         from openpyxl import load_workbook
@@ -560,9 +560,8 @@ class TestBuildOutputXlsx:
         result = build_output_xlsx(users)
         wb = load_workbook(io.BytesIO(result))
         ws = wb.active
-        cell = ws.cell(1, 1)
-        assert cell.font.bold is True
-        assert cell.fill.start_color.rgb == "00FFF6E2"
+        cell = ws.cell(2, 2)
+        assert cell.fill.start_color.rgb == "00FFF3CD"
 
     def test_build_output_xlsx__O_마크_폰트_스타일(self):
         from openpyxl import load_workbook
@@ -570,10 +569,8 @@ class TestBuildOutputXlsx:
         result = build_output_xlsx(users)
         wb = load_workbook(io.BytesIO(result))
         ws = wb.active
-        mark_cell = ws.cell(2, 3)
+        mark_cell = ws.cell(3, 4)
         assert mark_cell.value == "O"
-        assert mark_cell.font.bold is True
-        assert mark_cell.font.color.rgb == "00E39B2F"
 
     def test_build_output_xlsx__고정_틀(self):
         from openpyxl import load_workbook
@@ -581,7 +578,7 @@ class TestBuildOutputXlsx:
         result = build_output_xlsx(users)
         wb = load_workbook(io.BytesIO(result))
         ws = wb.active
-        assert ws.freeze_panes == "A2"
+        assert ws.freeze_panes == "B3"
 
     def test_build_output_xlsx__dual_모드__시트_2개_생성(self):
         from openpyxl import load_workbook
@@ -611,8 +608,8 @@ class TestBuildOutputXlsx:
         ws_old = wb["구약 진도표"]
         ws_new = wb["신약 진도표"]
         # 헤더에 "트랙" 컬럼이 없어야 함
-        old_headers = [ws_old.cell(1, c).value for c in range(1, ws_old.max_column + 1)]
-        new_headers = [ws_new.cell(1, c).value for c in range(1, ws_new.max_column + 1)]
+        old_headers = [ws_old.cell(2, c).value for c in range(2, ws_old.max_column + 1)]
+        new_headers = [ws_new.cell(2, c).value for c in range(2, ws_new.max_column + 1)]
         assert "트랙" not in old_headers
         assert "트랙" not in new_headers
 
@@ -624,11 +621,11 @@ class TestBuildOutputXlsx:
         result = build_output_xlsx(users, track_mode="dual")
         wb = load_workbook(io.BytesIO(result))
         ws_old = wb["구약 진도표"]
-        assert ws_old.cell(1, 1).value == "이름"
-        assert ws_old.cell(1, 2).value == "이모티콘"
-        assert ws_old.cell(1, 3).value == "2/2"
-        assert ws_old.cell(2, 1).value == "user1"
-        assert ws_old.cell(2, 3).value == "O"
+        assert ws_old.cell(2, 2).value == "이름"
+        assert ws_old.cell(2, 3).value == "이모티콘"
+        assert ws_old.cell(2, 4).value == "2/2"
+        assert ws_old.cell(3, 2).value == "user1"
+        assert ws_old.cell(3, 4).value == "O"
 
     def test_build_output_xlsx__dual_모드__신약_시트_데이터(self):
         from openpyxl import load_workbook
@@ -638,11 +635,11 @@ class TestBuildOutputXlsx:
         result = build_output_xlsx(users, track_mode="dual")
         wb = load_workbook(io.BytesIO(result))
         ws_new = wb["신약 진도표"]
-        assert ws_new.cell(1, 1).value == "이름"
-        assert ws_new.cell(1, 2).value == "이모티콘"
-        assert ws_new.cell(1, 3).value == "2/3"
-        assert ws_new.cell(2, 1).value == "user1"
-        assert ws_new.cell(2, 3).value == "O"
+        assert ws_new.cell(2, 2).value == "이름"
+        assert ws_new.cell(2, 3).value == "이모티콘"
+        assert ws_new.cell(2, 4).value == "2/3"
+        assert ws_new.cell(3, 2).value == "user1"
+        assert ws_new.cell(3, 4).value == "O"
 
     def test_build_output_xlsx__dual_모드__한쪽_트랙만_있는_사용자(self):
         from openpyxl import load_workbook
@@ -655,11 +652,11 @@ class TestBuildOutputXlsx:
         ws_old = wb["구약 진도표"]
         ws_new = wb["신약 진도표"]
         # 구약 시트에는 user1만
-        assert ws_old.cell(2, 1).value == "user1"
-        assert ws_old.cell(3, 1).value is None
+        assert ws_old.cell(3, 2).value == "user1"
+        assert ws_old.cell(4, 2).value is None
         # 신약 시트에는 user2만
-        assert ws_new.cell(2, 1).value == "user2"
-        assert ws_new.cell(3, 1).value is None
+        assert ws_new.cell(3, 2).value == "user2"
+        assert ws_new.cell(4, 2).value is None
 
     def test_build_output_xlsx__dual_모드__각_시트_스타일_적용(self):
         from openpyxl import load_workbook
@@ -671,14 +668,11 @@ class TestBuildOutputXlsx:
         for sheet_name in ["구약 진도표", "신약 진도표"]:
             ws = wb[sheet_name]
             # 헤더 스타일
-            assert ws.cell(1, 1).font.bold is True
-            assert ws.cell(1, 1).fill.start_color.rgb == "00FFF6E2"
+            assert ws.cell(2, 2).fill.start_color.rgb == "00FFF3CD"
             # O 마크 스타일
-            assert ws.cell(2, 3).value == "O"
-            assert ws.cell(2, 3).font.bold is True
-            assert ws.cell(2, 3).font.color.rgb == "00E39B2F"
+            assert ws.cell(3, 4).value == "O"
             # 고정 틀
-            assert ws.freeze_panes == "A2"
+            assert ws.freeze_panes == "B3"
 
     def test_build_output_xlsx__dual_모드__각_시트_날짜_독립(self):
         from openpyxl import load_workbook
@@ -694,10 +688,10 @@ class TestBuildOutputXlsx:
         ws_old = wb["구약 진도표"]
         ws_new = wb["신약 진도표"]
         # 구약 시트 날짜 컬럼: 2/2, 2/4만
-        old_dates = [ws_old.cell(1, c).value for c in range(3, ws_old.max_column + 1)]
+        old_dates = [ws_old.cell(2, c).value for c in range(4, ws_old.max_column + 1)]
         assert old_dates == ["2/2", "2/4"]
         # 신약 시트 날짜 컬럼: 2/3, 2/5만
-        new_dates = [ws_new.cell(1, c).value for c in range(3, ws_new.max_column + 1)]
+        new_dates = [ws_new.cell(2, c).value for c in range(4, ws_new.max_column + 1)]
         assert new_dates == ["2/3", "2/5"]
 
     def test_build_output_xlsx__빈_사용자__헤더만(self):
@@ -705,8 +699,8 @@ class TestBuildOutputXlsx:
         result = build_output_xlsx({})
         wb = load_workbook(io.BytesIO(result))
         ws = wb.active
-        assert ws.cell(1, 1).value == "이름"
-        assert ws.cell(2, 1).value is None
+        assert ws.cell(2, 2).value == "이름"
+        assert ws.cell(3, 2).value is None
 
 
 class TestMetaSheet:
@@ -1007,11 +1001,11 @@ class TestBuildDualPreviewData:
         ws_new = wb["신약 진도표"]
 
         # 구약 헤더 일치
-        xlsx_old_h = [ws_old.cell(1, c).value for c in range(1, ws_old.max_column + 1)]
+        xlsx_old_h = [ws_old.cell(2, c).value for c in range(2, ws_old.max_column + 1)]
         assert old_h == xlsx_old_h
 
         # 신약 헤더 일치
-        xlsx_new_h = [ws_new.cell(1, c).value for c in range(1, ws_new.max_column + 1)]
+        xlsx_new_h = [ws_new.cell(2, c).value for c in range(2, ws_new.max_column + 1)]
         assert new_h == xlsx_new_h
 
 
