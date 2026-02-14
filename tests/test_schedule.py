@@ -135,19 +135,19 @@ class TestDetectSchedule:
         result = detect_schedule(rows)
         assert result is None
 
-    def test_창세기만__미해당(self):
+    def test_창세기만__성경일독_감지(self):
         rows = [
             ("user1", "창세기 1장"),
         ]
         result = detect_schedule(rows)
-        assert result is None
+        assert result is BIBLE_DATES
 
-    def test_마태복음만__미해당(self):
+    def test_마태복음만__신약일독_감지(self):
         rows = [
             ("user1", "마태복음 1장"),
         ]
         result = detect_schedule(rows)
-        assert result is None
+        assert result is NT_DATES
 
     def test_빈_rows__None_반환(self):
         result = detect_schedule([])

@@ -82,7 +82,8 @@ def expand_range(start_month, start_day, end_month, end_day):
 def parse_dates(message, last_date=None):
     if not message:
         return []
-    cleaned = re.sub(r"\s+", "", message)
+    cleaned = re.sub(r"(\d)\s+(\d)", r"\1,\2", message)
+    cleaned = re.sub(r"\s+", "", cleaned)
     results = []
     index = 0
 

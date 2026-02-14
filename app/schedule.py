@@ -59,8 +59,8 @@ def detect_schedule(rows):
         if "마가복음" in message:
             has_mark = True
 
-    is_bible = has_genesis and has_exodus
-    is_nt = has_matthew and has_mark
+    is_bible = has_genesis or has_exodus
+    is_nt = has_matthew or has_mark
 
     logger.info(
         "진도표 키워드 감지 — 창세기: %s, 출애굽기: %s, 마태복음: %s, 마가복음: %s → %s",
