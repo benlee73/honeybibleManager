@@ -27,6 +27,15 @@ def _load_education_config():
         return {"nt_members": [], "excluded_members": []}
 
 
+def _normalize_room_name(room):
+    """방이름에서 '꿀성경' 접두사와 구분자를 제거하여 정규화한다."""
+    for prefix in ("꿀성경 - ", "꿀성경 ", "꿀성경"):
+        if room.startswith(prefix):
+            room = room[len(prefix):]
+            break
+    return room.strip(" -_")
+
+
 def _extract_room_from_filename(name):
     """파일명 끝에서 방이름을 추출한다.
 
@@ -45,7 +54,7 @@ def _extract_room_from_filename(name):
         if re.match(r"^\d{8}$", date_part) and re.match(r"^\d{4}$", time_part):
             # 4번째 인덱스부터 끝까지가 방이름 (_로 재결합)
             room = "_".join(parts[4:])
-            return room
+            return _normalize_room_name(room)
     return name
 
 
@@ -162,22 +171,25 @@ def _classify_education_users(users, config):
     Returns:
         dict: {"bible": {user: data}, "nt": {user: data}}
     """
-    nt_members = set(config.get("nt_members", []))
-    excluded = set(config.get("excluded_members", []))
+    nt_keywords = config.get("nt_members", [])
+    excluded_keywords = config.get("excluded_members", [])
+
+    def _matches(user, keywords):
+        return any(kw in user for kw in keywords)
 
     result = {"bible": {}, "nt": {}}
     for user, data in users.items():
-        if user in excluded:
+        if _matches(user, excluded_keywords):
             logger.info("교육국 미참여 제외: %s", user)
             continue
-        if user in nt_members:
+        if _matches(user, nt_keywords):
             result["nt"][user] = {"dates": data["dates"].copy(), "emoji": data["emoji"]}
         else:
             result["bible"][user] = {"dates": data["dates"].copy(), "emoji": data["emoji"]}
 
+    excluded_count = sum(1 for u in users if _matches(u, excluded_keywords))
     logger.info("교육국 분류: 성경일독 %d명, 신약일독 %d명, 제외 %d명",
-                len(result["bible"]), len(result["nt"]),
-                len(excluded & set(users.keys())))
+                len(result["bible"]), len(result["nt"]), excluded_count)
     return result
 
 

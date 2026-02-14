@@ -169,6 +169,22 @@ class TestClassifyEducationUsers:
         assert len(result["bible"]) == 0
         assert len(result["nt"]) == 0
 
+    def test_부분_일치__닉네임에_키워드_포함(self):
+        users = {
+            "김철수": {"dates": {"2/2"}, "emoji": "😀"},
+            "김지혜": {"dates": {"2/3"}, "emoji": "🔥"},
+            "이찬영": {"dates": {"2/4"}, "emoji": "🎉"},
+            "박지혁": {"dates": {"2/5"}, "emoji": "💀"},
+        }
+        config = {"nt_members": ["지혜", "찬영"], "excluded_members": ["지혁"]}
+
+        result = _classify_education_users(users, config)
+        assert "김철수" in result["bible"]
+        assert "김지혜" in result["nt"]
+        assert "이찬영" in result["nt"]
+        assert "박지혁" not in result["bible"]
+        assert "박지혁" not in result["nt"]
+
 
 class TestBuildMergedXlsx:
     def test_양쪽_시트_생성(self):
@@ -307,8 +323,8 @@ class TestMergeFiles:
     def test_교육국_파일_분류(self, mock_list, mock_download):
         users = {
             "김철수": {"dates": {"2/2"}, "emoji": "😀"},
-            "지혜": {"dates": {"2/3"}, "emoji": "🔥"},
-            "지혁": {"dates": {"2/4"}, "emoji": "💀"},
+            "홍지혜": {"dates": {"2/3"}, "emoji": "🔥"},
+            "박지혁": {"dates": {"2/4"}, "emoji": "💀"},
         }
         meta = {"room_name": "교육국", "track_mode": "single", "schedule_type": "education", "leader": "방장"}
         xlsx_bytes = build_output_xlsx(users, track_mode="single", meta=meta)
@@ -322,9 +338,9 @@ class TestMergeFiles:
         result = merge_files()
         assert result["success"] is True
         assert "김철수" in result["bible_users"]
-        assert "지혜" in result["nt_users"]
-        assert "지혁" not in result["bible_users"]
-        assert "지혁" not in result["nt_users"]
+        assert "홍지혜" in result["nt_users"]
+        assert "박지혁" not in result["bible_users"]
+        assert "박지혁" not in result["nt_users"]
 
     @patch("app.merger.download_drive_file")
     @patch("app.merger.list_drive_files")

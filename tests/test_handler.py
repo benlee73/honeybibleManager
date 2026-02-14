@@ -395,11 +395,11 @@ class TestBuildDriveFilename:
 
     def test_room_name_포함(self):
         result = _build_drive_filename("방장", "2026/02/09-10:50", room_name="꿀성경 2026 성경일독 part1")
-        assert result == "꿀성경_방장_20260209_1050_2026 성경일독 part1.xlsx"
+        assert result == "꿀성경_방장_20260209_1050_꿀성경 2026 성경일독 part1.xlsx"
 
-    def test_room_name_꿀성경_접두사_제거(self):
+    def test_room_name_그대로_보존(self):
         result = _build_drive_filename("방장", "2026/02/09-10:50", room_name="꿀성경 - 교육국")
-        assert result == "꿀성경_방장_20260209_1050_교육국.xlsx"
+        assert result == "꿀성경_방장_20260209_1050_꿀성경 - 교육국.xlsx"
 
     def test_room_name_None__기존_형식(self):
         result = _build_drive_filename("방장", "2026/02/09-10:50", room_name=None)

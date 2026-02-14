@@ -86,14 +86,7 @@ def _build_drive_filename(leader, saved_date, room_name=None):
         date_part = "_" + saved_date.replace("/", "").replace("-", "_").replace(":", "")
     room_part = ""
     if room_name:
-        # "꿀성경" 접두사 제거 후 파일명 안전 문자 처리
-        clean_room = room_name
-        for prefix in ("꿀성경 ", "꿀성경"):
-            if clean_room.startswith(prefix):
-                clean_room = clean_room[len(prefix):]
-                break
-        clean_room = clean_room.strip(" -_")
-        clean_room = re.sub(r'[\\/*?:"<>|]', "", clean_room)
+        clean_room = re.sub(r'[\\/*?:"<>|]', "", room_name).strip()
         if clean_room:
             room_part = f"_{clean_room}"
     return f"꿀성경_{name_part}{date_part}{room_part}.xlsx"
