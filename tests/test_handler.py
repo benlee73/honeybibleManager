@@ -622,9 +622,25 @@ _SAMPLE_ZIP = os.path.join(
     _SAMPLES_DIR,
     "Kakaotalk_Chat_\U0001f36f 2026 성경일독 part1_20260210_121623.zip",
 )
+_SAMPLE_TXT_IOS = os.path.join(
+    _SAMPLES_DIR,
+    "KakaoTalkChats (1).txt",
+)
+_SAMPLE_TXT_ANDROID = os.path.join(
+    _SAMPLES_DIR,
+    "KakaoTalk_20260214_1409_12_938_group.txt",
+)
+_SAMPLE_ZIP_EMOJI = os.path.join(
+    _SAMPLES_DIR,
+    "Kakaotalk_Chat_\U0001f4d626 성경일독 PART1\U0001f64f\U0001f3fb_20260213_184248.zip",
+)
 
 _samples_exist = all(
     os.path.isfile(p) for p in (_SAMPLE_CSV_PART1, _SAMPLE_CSV_EDUC, _SAMPLE_ZIP)
+)
+_extra_samples_exist = all(
+    os.path.isfile(p)
+    for p in (_SAMPLE_TXT_IOS, _SAMPLE_TXT_ANDROID, _SAMPLE_ZIP_EMOJI)
 )
 
 
@@ -790,3 +806,117 @@ class TestSizeLimit:
         data, error = _extract_txt_from_zip(zip_bytes)
         assert data is None
         assert "너무 큽니다" in error
+
+
+@pytest.mark.skipif(not _extra_samples_exist, reason="추가 샘플 파일 없음")
+class TestAnalyzeEndpointWithExtraSamples:
+    """추가 카카오톡 내보내기 샘플(TXT/ZIP)을 사용한 POST /analyze 통합 테스트."""
+
+    def test_iOS_TXT__정상_분석(self, test_server):
+        with open(_SAMPLE_TXT_IOS, "rb") as f:
+            file_bytes = f.read()
+        filename = os.path.basename(_SAMPLE_TXT_IOS)
+        body, content_type = _make_analyze_payload(filename, file_bytes)
+        req = Request(
+            f"{test_server}/analyze",
+            data=body,
+            headers={"Content-Type": content_type},
+            method="POST",
+        )
+        resp = urlopen(req)
+        assert resp.status == 200
+        data = json.loads(resp.read())
+        assert "xlsx_base64" in data
+        assert "image_base64" in data
+        preview = data["preview"]
+        assert len(preview["headers"]) >= 3
+        assert len(preview["rows"]) >= 2
+
+    def test_iOS_TXT__track_mode_응답_포함(self, test_server):
+        with open(_SAMPLE_TXT_IOS, "rb") as f:
+            file_bytes = f.read()
+        filename = os.path.basename(_SAMPLE_TXT_IOS)
+        body, content_type = _make_analyze_payload(filename, file_bytes)
+        req = Request(
+            f"{test_server}/analyze",
+            data=body,
+            headers={"Content-Type": content_type},
+            method="POST",
+        )
+        resp = urlopen(req)
+        data = json.loads(resp.read())
+        assert "track_mode" in data
+        assert data["track_mode"] in ("single", "dual")
+
+    def test_Android_TXT__정상_분석(self, test_server):
+        with open(_SAMPLE_TXT_ANDROID, "rb") as f:
+            file_bytes = f.read()
+        filename = os.path.basename(_SAMPLE_TXT_ANDROID)
+        body, content_type = _make_analyze_payload(filename, file_bytes)
+        req = Request(
+            f"{test_server}/analyze",
+            data=body,
+            headers={"Content-Type": content_type},
+            method="POST",
+        )
+        resp = urlopen(req)
+        assert resp.status == 200
+        data = json.loads(resp.read())
+        assert "xlsx_base64" in data
+        assert "image_base64" in data
+        preview = data["preview"]
+        assert len(preview["headers"]) >= 3
+        assert len(preview["rows"]) >= 2
+
+    def test_Android_TXT__track_mode_응답_포함(self, test_server):
+        with open(_SAMPLE_TXT_ANDROID, "rb") as f:
+            file_bytes = f.read()
+        filename = os.path.basename(_SAMPLE_TXT_ANDROID)
+        body, content_type = _make_analyze_payload(filename, file_bytes)
+        req = Request(
+            f"{test_server}/analyze",
+            data=body,
+            headers={"Content-Type": content_type},
+            method="POST",
+        )
+        resp = urlopen(req)
+        data = json.loads(resp.read())
+        assert "track_mode" in data
+        assert data["track_mode"] in ("single", "dual")
+
+    def test_이모지_ZIP__정상_분석(self, test_server):
+        with open(_SAMPLE_ZIP_EMOJI, "rb") as f:
+            file_bytes = f.read()
+        filename = os.path.basename(_SAMPLE_ZIP_EMOJI)
+        body, content_type = _make_analyze_payload(filename, file_bytes)
+        req = Request(
+            f"{test_server}/analyze",
+            data=body,
+            headers={"Content-Type": content_type},
+            method="POST",
+        )
+        resp = urlopen(req)
+        assert resp.status == 200
+        data = json.loads(resp.read())
+        assert "xlsx_base64" in data
+        assert "image_base64" in data
+        preview = data["preview"]
+        assert len(preview["headers"]) >= 3
+        assert len(preview["rows"]) >= 2
+
+    def test_이모지_ZIP__xlsx_디코딩_가능(self, test_server):
+        with open(_SAMPLE_ZIP_EMOJI, "rb") as f:
+            file_bytes = f.read()
+        filename = os.path.basename(_SAMPLE_ZIP_EMOJI)
+        body, content_type = _make_analyze_payload(filename, file_bytes)
+        req = Request(
+            f"{test_server}/analyze",
+            data=body,
+            headers={"Content-Type": content_type},
+            method="POST",
+        )
+        resp = urlopen(req)
+        data = json.loads(resp.read())
+        xlsx_bytes = base64.b64decode(data["xlsx_base64"])
+        assert len(xlsx_bytes) > 0
+        assert xlsx_bytes[:2] == b"PK"
