@@ -1046,5 +1046,11 @@ class TestNormalizeUserName:
     def test_모두_제거되면__원본_반환(self):
         assert normalize_user_name("ABC 123") == "ABC 123"
 
+    def test_형_제거(self):
+        assert normalize_user_name("철수 형") == "철수"
+
+    def test_형_붙어있을때_제거(self):
+        assert normalize_user_name("철수형") == "철수"
+
     def test_한글만__그대로(self):
         assert normalize_user_name("김철수") == "김철수"

@@ -14,6 +14,7 @@ logger = get_logger("analyzer")
 MAX_DATES_PER_MESSAGE = 14
 
 _STRIP_WORDS = ("광천", "누나", "오빠", "언니")
+_STRIP_SUFFIXES = ("형",)
 
 
 def normalize_user_name(name: str) -> str:
@@ -21,6 +22,8 @@ def normalize_user_name(name: str) -> str:
     result = name
     for word in _STRIP_WORDS:
         result = result.replace(word, "")
+    for suffix in _STRIP_SUFFIXES:
+        result = result.removesuffix(suffix)
     result = "".join(
         ch for ch in result
         if not is_emoji_component(ch)
