@@ -86,6 +86,23 @@ _EN_SYSTEM_MSG_RE = re.compile(
     rf"^{_EN_MONTHS}\s+\d{{1,2}},\s*\d{{4}}\s+at\s+\d{{1,2}}:\d{{2}}:\s"
 )
 
+# ── 윈도우 PC 정규식 ──
+
+# 윈도우 저장 날짜: "저장한 날짜 : 2026-02-14 14:09:18"
+_WIN_SAVED_DATE_RE = re.compile(
+    r"^저장한 날짜\s*:\s*(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})"
+)
+
+# 윈도우 날짜 구분선: "--------------- 2026년 2월 1일 일요일 ---------------"
+_WIN_DATE_HEADER_RE = re.compile(
+    r"^-{3,}\s*\d{4}년\s*\d{1,2}월\s*\d{1,2}일\s*\S+요일\s*-{3,}$"
+)
+
+# 윈도우 사용자 메시지: "[김예슬] [오후 8:35] 안녕하세요!"
+_WIN_USER_MSG_RE = re.compile(
+    r"^\[(.+?)\]\s*\[(오전|오후)\s+(\d{1,2}):(\d{2})\]\s*(.*)"
+)
+
 # ── 공용 ──
 
 # 파일 헤더 또는 저장 날짜 줄
@@ -93,14 +110,19 @@ _FILE_HEADER_RE = re.compile(r"^(Talk_|저장한 날짜|Date Saved)")
 
 
 def _detect_language(lines):
-    """앞쪽 10줄을 확인하여 'en', 'ko', 'ko_ymd' 중 하나를 반환한다."""
+    """앞쪽 10줄을 확인하여 'en', 'ko', 'ko_ymd', 'ko_win' 중 하나를 반환한다."""
     for line in lines[:10]:
         stripped = line.strip()
         if stripped.startswith("Date Saved"):
             return "en"
         if stripped.startswith("저장한 날짜"):
+            # ISO 형식 (2026-02-14 14:09:18) → 윈도우 PC
+            if re.search(r"\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}", stripped):
+                return "ko_win"
+            # 년/월/일 형식 → 갤럭시
             if "년" in stripped:
                 return "ko_ymd"
+            # 점 형식 → iPhone
             return "ko"
     return "ko"
 
@@ -123,7 +145,7 @@ def extract_chat_meta(text):
             continue
 
         # 방이름: 한국어 형식에만 존재 (영문 TXT에는 방이름 헤더 없음)
-        if room_name is None and lang in ("ko", "ko_ymd"):
+        if room_name is None and lang in ("ko", "ko_ymd", "ko_win"):
             room_re = _GALAXY_ROOM_NAME_RE if lang == "ko_ymd" else _ROOM_NAME_RE
             m = room_re.match(stripped)
             if m:
@@ -138,6 +160,13 @@ def extract_chat_meta(text):
                     hour, minute = int(m.group(4)), m.group(5)
                     month = _EN_MONTH_MAP[month_name]
                     saved_date = f"{year}/{month:02d}/{int(day):02d}-{hour:02d}:{minute}"
+                    continue
+            elif lang == "ko_win":
+                m = _WIN_SAVED_DATE_RE.match(stripped)
+                if m:
+                    year, month, day = m.group(1), m.group(2), m.group(3)
+                    hour, minute = m.group(4), m.group(5)
+                    saved_date = f"{year}/{month}/{day}-{hour}:{minute}"
                     continue
             else:
                 saved_re = _GALAXY_SAVED_DATE_RE if lang == "ko_ymd" else _SAVED_DATE_RE
@@ -164,18 +193,26 @@ def parse_txt(text):
     lines = text.replace("\r\n", "\n").replace("\r", "\n").split("\n")
     lang = _detect_language(lines)
 
-    if lang == "en":
+    if lang == "ko_win":
+        date_header_re = _WIN_DATE_HEADER_RE
+        user_msg_re = _WIN_USER_MSG_RE
+        system_msg_re = None
+        msg_group = 5
+    elif lang == "en":
         date_header_re = _EN_DATE_HEADER_RE
         user_msg_re = _EN_USER_MSG_RE
         system_msg_re = _EN_SYSTEM_MSG_RE
+        msg_group = 2
     elif lang == "ko_ymd":
         date_header_re = _GALAXY_DATE_HEADER_RE
         user_msg_re = _GALAXY_USER_MSG_RE
         system_msg_re = _GALAXY_SYSTEM_MSG_RE
+        msg_group = 2
     else:
         date_header_re = _DATE_HEADER_RE
         user_msg_re = _USER_MSG_RE
         system_msg_re = _SYSTEM_MSG_RE
+        msg_group = 2
 
     rows = []
     current_user = None
@@ -204,10 +241,10 @@ def parse_txt(text):
             if current_user is not None:
                 rows.append((current_user, current_message))
             current_user = user_match.group(1).strip()
-            current_message = user_match.group(2).strip()
+            current_message = user_match.group(msg_group).strip()
             continue
 
-        if system_msg_re.match(stripped):
+        if system_msg_re and system_msg_re.match(stripped):
             skip_system += 1
             if current_user is not None:
                 rows.append((current_user, current_message))
