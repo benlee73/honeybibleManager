@@ -257,9 +257,12 @@ h1 {
   color: var(--ink-2);
   background: transparent;
   border: none;
+  border-bottom: 1px solid var(--line);
+  margin-bottom: -1px;
   cursor: pointer;
-  transition: color 0.2s ease, background 0.2s ease;
+  transition: color 0.2s ease, background 0.2s ease, opacity 0.2s ease;
   border-radius: 0;
+  opacity: 0.5;
 }
 
 .panel-tab:first-child {
@@ -267,11 +270,14 @@ h1 {
 }
 
 .panel-tab:hover:not(.is-active) {
+  opacity: 0.75;
   background: var(--surface-strong);
 }
 
 .panel-tab.is-active {
   color: var(--ink-1);
+  opacity: 1;
+  border-bottom-color: transparent;
 }
 
 .panel-tab-indicator {
@@ -279,9 +285,9 @@ h1 {
   bottom: -1px;
   left: 0;
   width: 50%;
-  height: 2px;
+  height: 3px;
   background: var(--honey-2);
-  border-radius: 2px 2px 0 0;
+  border-radius: 3px 3px 0 0;
   transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
   pointer-events: none;
 }
