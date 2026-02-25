@@ -259,8 +259,8 @@ class TestExtractTracks:
     def test_extract_tracks__둘_다__old_new_반환(self):
         assert extract_tracks("2/2 구약 신약 🐷") == {"old", "new"}
 
-    def test_extract_tracks__키워드_없음__빈_set_반환(self):
-        assert extract_tracks("2/2 🐷") == set()
+    def test_extract_tracks__키워드_없음__양쪽_트랙_반환(self):
+        assert extract_tracks("2/2 🐷") == {"old", "new"}
 
 
 class TestAnalyzeChatDual:
@@ -283,7 +283,7 @@ class TestAnalyzeChatDual:
         assert result["user1"]["dates_old"] == {"2/2", "2/4"}
         assert result["user1"]["dates_new"] == {"2/3", "2/4"}
 
-    def test_analyze_chat_dual__키워드_없는_메시지_스킵(self):
+    def test_analyze_chat_dual__키워드_없는_메시지_양쪽_트랙_체크(self):
         csv_text = self._make_csv([
             ["날짜", "이름", "메시지"],
             ["2024-01-01", "user1", "2/2 구약 😀"],
@@ -291,8 +291,35 @@ class TestAnalyzeChatDual:
         ])
         result = analyze_chat(csv_text, track_mode="dual")
         assert "user1" in result
-        assert result["user1"]["dates_old"] == {"2/2"}
-        assert result["user1"]["dates_new"] == set()
+        assert result["user1"]["dates_old"] == {"2/2", "2/3"}
+        assert result["user1"]["dates_new"] == {"2/3"}
+
+    def test_analyze_chat_dual__키워드_없는_범위_메시지_양쪽_트랙_체크(self):
+        csv_text = self._make_csv([
+            ["날짜", "이름", "메시지"],
+            ["2024-01-01", "user1", "2/2 구약 😀"],
+            ["2024-01-02", "user1", "~2/4 😀"],
+        ])
+        result = analyze_chat(csv_text, track_mode="dual")
+        assert "user1" in result
+        # ~2/4는 구약 last_old=2/2 기준으로 2/3,2/4 확장, 신약은 last_new=None이므로 2/4만
+        assert "2/3" in result["user1"]["dates_old"]
+        assert "2/4" in result["user1"]["dates_old"]
+        assert "2/4" in result["user1"]["dates_new"]
+
+    def test_analyze_chat_dual__키워드_있는_메시지와_없는_메시지_혼합(self):
+        csv_text = self._make_csv([
+            ["날짜", "이름", "메시지"],
+            ["2024-01-01", "user1", "2/2 구약 😀"],
+            ["2024-01-01", "user1", "2/2 신약 😀"],
+            ["2024-01-02", "user1", "2/3 😀"],
+            ["2024-01-03", "user1", "2/4 구약 😀"],
+        ])
+        result = analyze_chat(csv_text, track_mode="dual")
+        assert "user1" in result
+        # 2/3은 키워드 없으므로 양쪽에 체크
+        assert result["user1"]["dates_old"] == {"2/2", "2/3", "2/4"}
+        assert result["user1"]["dates_new"] == {"2/2", "2/3"}
 
     def test_analyze_chat_dual__여러_사용자(self):
         csv_text = self._make_csv([
@@ -561,7 +588,7 @@ class TestBuildOutputXlsx:
         wb = load_workbook(io.BytesIO(result))
         ws = wb.active
         cell = ws.cell(2, 2)
-        assert cell.fill.start_color.rgb == "00FFF3CD"
+        assert cell.fill.start_color.rgb == "00D6E4F0"
 
     def test_build_output_xlsx__O_마크_폰트_스타일(self):
         from openpyxl import load_workbook
@@ -668,7 +695,7 @@ class TestBuildOutputXlsx:
         for sheet_name in ["구약 진도표", "신약 진도표"]:
             ws = wb[sheet_name]
             # 헤더 스타일
-            assert ws.cell(2, 2).fill.start_color.rgb == "00FFF3CD"
+            assert ws.cell(2, 2).fill.start_color.rgb == "00D6E4F0"
             # O 마크 스타일
             assert ws.cell(3, 4).value == "O"
             # 고정 틀

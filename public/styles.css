@@ -1147,6 +1147,29 @@ body[data-theme="neon"] .guide-toggle-indicator {
   }
 }
 
+.merge-mode {
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 10px 16px;
+  margin: 0;
+  background: var(--input-bg);
+  display: flex;
+  gap: 18px;
+  font-size: 14px;
+  color: var(--ink-1);
+}
+
+.merge-mode label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+
+.merge-mode input[type="radio"] {
+  accent-color: var(--honey-3);
+}
+
 .merge-stats {
   display: flex;
   gap: 12px;

@@ -101,6 +101,8 @@ def extract_tracks(message):
         tracks.add("old")
     if "신약" in message:
         tracks.add("new")
+    if not tracks:
+        tracks = {"old", "new"}
     return tracks
 
 
@@ -436,12 +438,12 @@ def build_preview_data(users, track_mode="single"):
 
 
 def _apply_sheet_style(ws, headers, rows, leader_col=None, title=None):
-    header_fill = PatternFill(start_color="FFF3CD", end_color="FFF3CD", fill_type="solid")
+    header_fill = PatternFill(start_color="D6E4F0", end_color="D6E4F0", fill_type="solid")
     header_font = Font(name="맑은 고딕", size=11)
     body_font = Font(name="맑은 고딕", size=11)
     mark_font = Font(name="맑은 고딕", size=11)
     center_align = Alignment(horizontal="center", vertical="center")
-    name_fill = PatternFill(start_color="FFF8E1", end_color="FFF8E1", fill_type="solid")
+    name_fill = PatternFill(start_color="EBF1F8", end_color="EBF1F8", fill_type="solid")
 
     thin = Side(style="thin")
     medium = Side(style="medium")
