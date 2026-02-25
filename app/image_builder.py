@@ -1,9 +1,10 @@
 import io
 import os
+from functools import lru_cache
 
 from PIL import Image, ImageDraw, ImageFont
 
-from app.analyzer import build_dual_preview_data, build_preview_data
+from app.output_builder import build_dual_preview_data, build_preview_data
 
 _FONTS_DIR = os.path.join(os.path.dirname(__file__), "fonts")
 
@@ -67,6 +68,7 @@ def _get_theme(theme_id):
     return _THEMES.get(theme_id, _THEMES["honey"])
 
 
+@lru_cache(maxsize=32)
 def _load_font(size, bold=False):
     """번들 폰트 → 시스템 폰트 → 기본 폰트 순으로 탐색."""
     candidates = [
@@ -89,6 +91,7 @@ def _load_font(size, bold=False):
     return ImageFont.load_default()
 
 
+@lru_cache(maxsize=16)
 def _load_emoji_font(size):
     """이모지 전용 폰트 로드. NotoEmoji 번들 → 시스템 폰트 → None."""
     candidates = [

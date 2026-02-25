@@ -8,7 +8,8 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from openpyxl import Workbook, load_workbook
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 
-from app.analyzer import COL_PAD, ROW_PAD, _apply_sheet_style, sort_dates
+from app.output_builder import sort_dates
+from app.style_constants import COL_PAD, ROW_PAD, apply_sheet_style
 from app.drive_uploader import download_drive_file, list_drive_files
 from app.logger import get_logger
 
@@ -96,21 +97,23 @@ def select_latest_per_room(files):
 
 def read_meta_from_xlsx(xlsx_bytes):
     """XLSX 바이트에서 _메타 시트를 읽어 dict로 반환한다. 없으면 None."""
+    wb = None
     try:
         wb = load_workbook(io.BytesIO(xlsx_bytes), read_only=True, data_only=True)
         if "_메타" not in wb.sheetnames:
-            wb.close()
             return None
         ws = wb["_메타"]
         meta = {}
         for row in ws.iter_rows(min_col=1, max_col=2, values_only=True):
             if row[0] is not None:
                 meta[str(row[0])] = str(row[1]) if row[1] is not None else ""
-        wb.close()
         return meta
     except Exception as exc:
         logger.warning("메타데이터 읽기 실패: %s", exc)
         return None
+    finally:
+        if wb is not None:
+            wb.close()
 
 
 def _find_header_row(ws):
@@ -136,56 +139,58 @@ def read_users_from_xlsx(xlsx_bytes, track_mode):
               dual → {user: {"dates_old": set, "dates_new": set, "emoji": str}}
     """
     wb = load_workbook(io.BytesIO(xlsx_bytes), read_only=True, data_only=True)
-    users = {}
+    try:
+        users = {}
 
-    if track_mode == "dual":
-        for sheet_name, date_key in [("구약 진도표", "dates_old"), ("신약 진도표", "dates_new")]:
+        if track_mode == "dual":
+            for sheet_name, date_key in [("구약 진도표", "dates_old"), ("신약 진도표", "dates_new")]:
+                if sheet_name not in wb.sheetnames:
+                    continue
+                ws = wb[sheet_name]
+                rows_iter, header, col_offset = _find_header_row(ws)
+                if not header:
+                    continue
+                # 날짜 컬럼: "이름", "이모티콘" 뒤부터
+                date_cols = list(header[2:])
+                for row in rows_iter:
+                    if not row or col_offset >= len(row) or not row[col_offset]:
+                        continue
+                    name = str(row[col_offset])
+                    emoji = str(row[col_offset + 1]) if (col_offset + 1) < len(row) and row[col_offset + 1] else ""
+                    entry = users.setdefault(name, {"dates_old": set(), "dates_new": set(), "emoji": emoji})
+                    if not entry["emoji"] and emoji:
+                        entry["emoji"] = emoji
+                    for i, date_val in enumerate(date_cols):
+                        cell_idx = col_offset + 2 + i
+                        cell_val = row[cell_idx] if cell_idx < len(row) else None
+                        if cell_val == "O" and date_val:
+                            entry[date_key].add(str(date_val))
+        else:
+            sheet_name = "꿀성경 진도표"
             if sheet_name not in wb.sheetnames:
-                continue
+                # 첫 번째 시트 사용 (호환성)
+                sheet_name = wb.sheetnames[0]
             ws = wb[sheet_name]
             rows_iter, header, col_offset = _find_header_row(ws)
-            if not header:
-                continue
-            # 날짜 컬럼: "이름", "이모티콘" 뒤부터
-            date_cols = list(header[2:])
-            for row in rows_iter:
-                if not row or col_offset >= len(row) or not row[col_offset]:
-                    continue
-                name = str(row[col_offset])
-                emoji = str(row[col_offset + 1]) if (col_offset + 1) < len(row) and row[col_offset + 1] else ""
-                entry = users.setdefault(name, {"dates_old": set(), "dates_new": set(), "emoji": emoji})
-                if not entry["emoji"] and emoji:
-                    entry["emoji"] = emoji
-                for i, date_val in enumerate(date_cols):
-                    cell_idx = col_offset + 2 + i
-                    cell_val = row[cell_idx] if cell_idx < len(row) else None
-                    if cell_val == "O" and date_val:
-                        entry[date_key].add(str(date_val))
-    else:
-        sheet_name = "꿀성경 진도표"
-        if sheet_name not in wb.sheetnames:
-            # 첫 번째 시트 사용 (호환성)
-            sheet_name = wb.sheetnames[0]
-        ws = wb[sheet_name]
-        rows_iter, header, col_offset = _find_header_row(ws)
-        if header:
-            date_cols = list(header[2:])
-            for row in rows_iter:
-                if not row or col_offset >= len(row) or not row[col_offset]:
-                    continue
-                name = str(row[col_offset])
-                emoji = str(row[col_offset + 1]) if (col_offset + 1) < len(row) and row[col_offset + 1] else ""
-                entry = users.setdefault(name, {"dates": set(), "emoji": emoji})
-                if not entry["emoji"] and emoji:
-                    entry["emoji"] = emoji
-                for i, date_val in enumerate(date_cols):
-                    cell_idx = col_offset + 2 + i
-                    cell_val = row[cell_idx] if cell_idx < len(row) else None
-                    if cell_val == "O" and date_val:
-                        entry["dates"].add(str(date_val))
+            if header:
+                date_cols = list(header[2:])
+                for row in rows_iter:
+                    if not row or col_offset >= len(row) or not row[col_offset]:
+                        continue
+                    name = str(row[col_offset])
+                    emoji = str(row[col_offset + 1]) if (col_offset + 1) < len(row) and row[col_offset + 1] else ""
+                    entry = users.setdefault(name, {"dates": set(), "emoji": emoji})
+                    if not entry["emoji"] and emoji:
+                        entry["emoji"] = emoji
+                    for i, date_val in enumerate(date_cols):
+                        cell_idx = col_offset + 2 + i
+                        cell_val = row[cell_idx] if cell_idx < len(row) else None
+                        if cell_val == "O" and date_val:
+                            entry["dates"].add(str(date_val))
 
-    wb.close()
-    return users
+        return users
+    finally:
+        wb.close()
 
 
 def _classify_education_users(users, config):
@@ -257,7 +262,7 @@ def _is_saturday(md_str):
     return datetime.date(2026, int(month), int(day)).weekday() == 5
 
 
-def _compute_stats(users, all_dates_sorted):
+def _format_sheet_stats(users, all_dates_sorted):
     """성경일독/신약일독 시트용 통계 문자열을 생성한다."""
     all_dates_set = set(all_dates_sorted)
     num_dates = len(all_dates_sorted)
@@ -553,10 +558,10 @@ def _build_merged_sheet(ws, users, title=None):
         row.extend("O" if d in data["dates"] else "" for d in all_dates_sorted)
         rows.append(row)
 
-    _apply_sheet_style(ws, headers, rows, leader_col=1, title=title)
+    apply_sheet_style(ws, headers, rows, leader_col=1, title=title)
     _apply_leader_merge(ws, rows, title)
     if title:
-        stats_text = _compute_stats(users, all_dates_sorted)
+        stats_text = _format_sheet_stats(users, all_dates_sorted)
         _insert_stats_row(ws, stats_text, len(headers))
 
 
@@ -584,7 +589,7 @@ def _build_merged_dual_sheet(ws, dual_users, title=None):
             row.extend("O" if d in data["dates_new"] else "" for d in all_dates_sorted)
             rows.append(row)
 
-    _apply_sheet_style(ws, headers, rows, leader_col=1, title=title)
+    apply_sheet_style(ws, headers, rows, leader_col=1, title=title)
     _apply_leader_merge(ws, rows, title)
     if title:
         stats_text = _compute_dual_stats(dual_users, all_dates_sorted)

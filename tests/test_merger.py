@@ -6,11 +6,12 @@ from unittest.mock import MagicMock, patch
 import pytest
 from openpyxl import Workbook, load_workbook
 
-from app.analyzer import COL_PAD, ROW_PAD, _apply_sheet_style, build_output_xlsx
+from app.analyzer import build_output_xlsx
+from app.style_constants import COL_PAD, ROW_PAD, apply_sheet_style
 from app.merger import (
     _classify_education_users,
     _compute_dual_stats,
-    _compute_stats,
+    _format_sheet_stats,
     _extract_date_from_filename,
     _extract_room_from_filename,
     _insert_stats_row,
@@ -609,13 +610,13 @@ class TestIsSaturday:
         assert _is_saturday("2/6") is False
 
 
-class TestComputeStats:
+class TestFormatSheetStats:
     def test_전원_완독(self):
         users = {
             "user1": {"dates": {"2/2", "2/3"}, "emoji": "😀", "leader": ""},
             "user2": {"dates": {"2/2", "2/3"}, "emoji": "🔥", "leader": ""},
         }
-        result = _compute_stats(users, ["2/2", "2/3"])
+        result = _format_sheet_stats(users, ["2/2", "2/3"])
         assert "진행: 2일" in result
         assert "참여: 2명" in result
         assert "완독: 2명 (100%)" in result
@@ -625,21 +626,21 @@ class TestComputeStats:
             "user1": {"dates": {"2/2", "2/3"}, "emoji": "😀", "leader": ""},
             "user2": {"dates": {"2/2"}, "emoji": "🔥", "leader": ""},
         }
-        result = _compute_stats(users, ["2/2", "2/3"])
+        result = _format_sheet_stats(users, ["2/2", "2/3"])
         assert "완독: 1명 (50%)" in result
 
     def test_완독_0명(self):
         users = {
             "user1": {"dates": {"2/2"}, "emoji": "😀", "leader": ""},
         }
-        result = _compute_stats(users, ["2/2", "2/3"])
+        result = _format_sheet_stats(users, ["2/2", "2/3"])
         assert "완독: 0명 (0%)" in result
 
     def test_참여자_없음(self):
         users = {
             "user1": {"dates": set(), "emoji": "😀", "leader": ""},
         }
-        result = _compute_stats(users, ["2/2"])
+        result = _format_sheet_stats(users, ["2/2"])
         assert "참여: 0명" in result
         assert "완독: 0명 (0%)" in result
 
@@ -720,7 +721,7 @@ class TestInsertStatsRow:
         ws = wb.active
         headers = ["담당", "이름", "이모티콘", "2/2"]
         rows = [["방장", "user1", "😀", "O"]]
-        _apply_sheet_style(ws, headers, rows, leader_col=1, title="테스트 타이틀")
+        apply_sheet_style(ws, headers, rows, leader_col=1, title="테스트 타이틀")
 
         _insert_stats_row(ws, "진행: 1일 | 참여: 1명 | 완독: 1명 (100%)", len(headers))
 
@@ -733,7 +734,7 @@ class TestInsertStatsRow:
         ws = wb.active
         headers = ["담당", "이름", "이모티콘"]
         rows = []
-        _apply_sheet_style(ws, headers, rows, leader_col=1, title="테스트")
+        apply_sheet_style(ws, headers, rows, leader_col=1, title="테스트")
 
         assert ws.freeze_panes == "B4"
         _insert_stats_row(ws, "통계", len(headers))

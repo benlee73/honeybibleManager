@@ -9,10 +9,13 @@
 ```
 server.py              # 진입점 (HTTPServer)
 app/
-  handler.py           # HTTP 요청 처리, 파일 형식 감지, /merge 엔드포인트
-  analyzer.py          # 채팅 분석, 결과 생성 (CSV/XLSX/preview), 메타데이터 시트
+  handler.py           # HTTP 라우팅, 오케스트레이션
+  analyzer.py          # 채팅 분석 엔진 (이모지 할당, 날짜 수집)
+  output_builder.py    # CSV/XLSX/미리보기 출력 생성
+  file_processor.py    # 파일 형식 감지, 메타데이터 추출, 방장/트랙 감지
+  style_constants.py   # 공유 XLSX 스타일 상수 (ROW_PAD, COL_PAD) 및 래퍼
   merger.py            # 통합 진도표 로직 (Drive 파일 병합, 교육국 분류)
-  image_builder.py     # 결과 PNG 이미지 생성 (4종 테마)
+  image_builder.py     # 결과 PNG 이미지 생성 (4종 테마, 폰트 캐싱)
   txt_parser.py        # 모바일 TXT 내보내기 파싱
   schedule.py          # 진도표 날짜 생성 및 선택
   date_parser.py       # 메시지 날짜 파싱
@@ -30,11 +33,11 @@ education_config.json  # 교육국 멤버 분류 설정 (신약일독/미참여)
 ## 핵심 동작 흐름
 
 1. 클라이언트가 대화 파일(CSV/TXT/ZIP)과 `track_mode`(`single`/`dual`), `theme`(honey/bw/brew/neon)를 `POST /analyze`로 업로드
-2. `handler.py`가 multipart 데이터에서 파일과 트랙 모드 추출, 파일 형식 감지(매직바이트/확장자)
+2. `handler.py`가 multipart 데이터에서 파일 추출, `file_processor.py`가 파일 형식 감지(매직바이트/확장자) 및 메타데이터 추출
 3. 파일 형식에 따라 파싱: CSV → `parse_csv_rows()`, TXT → `parse_txt()`, ZIP → TXT 추출 후 `parse_txt()`
 4. `analyzer.py`가 `(user, message)` 리스트를 분석하여 사용자별 이모티콘 할당 및 날짜 수집 (투트랙 모드 시 구약/신약 분리)
 5. `date_parser.py`와 `emoji.py`가 각각 날짜/이모티콘 추출 담당
-6. 결과를 스타일 적용된 XLSX와 PNG 이미지로 변환하고, JSON 응답(xlsx_base64 + image_base64 + preview 데이터)으로 반환
+6. `output_builder.py`가 결과를 스타일 적용된 XLSX와 CSV, 미리보기 데이터로 변환하고, JSON 응답(xlsx_base64 + image_base64 + preview 데이터)으로 반환
 7. 프론트엔드에서 "이미지로 보기" 버튼 클릭 시 PNG 이미지를 `<img>` 태그로 표시 (모바일에서 길게 눌러 사진 저장 가능)
 8. (선택) "구글 드라이브 저장" 버튼 클릭 시 `POST /upload-drive`로 XLSX base64를 전송하여 Google Drive에 업로드
 9. (통합) "통합" 버튼 클릭 시 `POST /merge`로 Drive의 모든 방 결과를 병합하여 성경일독/신약일독 통합 진도표 생성
