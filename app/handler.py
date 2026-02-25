@@ -406,17 +406,33 @@ class HoneyBibleHandler(BaseHTTPRequestHandler):
             })
             return
 
+        # request body에서 dual_mode 파싱
+        dual_mode = "separate"
+        content_length = self.headers.get("Content-Length")
+        if content_length:
+            try:
+                length = int(content_length)
+                if length > 0:
+                    payload = self.rfile.read(length)
+                    body = json.loads(payload)
+                    dual_mode = body.get("dual_mode", "separate")
+            except (ValueError, json.JSONDecodeError, TypeError):
+                pass
+
         try:
-            result = merge_files()
+            result = merge_files(dual_mode=dual_mode)
             if not result["success"]:
                 self._send_json(200, result)
                 return
 
             bible_users = result["bible_users"]
             nt_users = result["nt_users"]
+            dual_users = result.get("dual_users", {})
 
-            xlsx_bytes = build_merged_xlsx(bible_users, nt_users)
-            preview_headers, preview_rows = build_merged_preview(bible_users, nt_users)
+            xlsx_bytes = build_merged_xlsx(bible_users, nt_users, dual_users=dual_users)
+            preview_headers, preview_rows = build_merged_preview(
+                bible_users, nt_users, dual_users=dual_users,
+            )
 
             # 통합 이미지 생성
             image_bytes = b""
@@ -428,9 +444,17 @@ class HoneyBibleHandler(BaseHTTPRequestHandler):
 
             oldest_date = result.get("oldest_file_date", "")
             if oldest_date:
-                filename = f"꿀성경_통합_진도표_{oldest_date}.xlsx"
+                filename = f"통합_꿀성경_진도표_{oldest_date}.xlsx"
             else:
-                filename = "꿀성경_통합_진도표.xlsx"
+                filename = "통합_꿀성경_진도표.xlsx"
+
+            stats = {
+                "bible_count": len(bible_users),
+                "nt_count": len(nt_users),
+                "room_count": len(result["processed_rooms"]),
+            }
+            if dual_users:
+                stats["dual_count"] = len(dual_users)
 
             response_payload = {
                 "success": True,
@@ -438,11 +462,7 @@ class HoneyBibleHandler(BaseHTTPRequestHandler):
                 "filename": filename,
                 "drive_filename": filename,
                 "preview": {"headers": preview_headers, "rows": preview_rows},
-                "stats": {
-                    "bible_count": len(bible_users),
-                    "nt_count": len(nt_users),
-                    "room_count": len(result["processed_rooms"]),
-                },
+                "stats": stats,
                 "processed_rooms": result["processed_rooms"],
                 "skipped_files": result["skipped_files"],
             }

@@ -1,4 +1,5 @@
 {
   "nt_members": ["홍지혜", "이찬영"],
-  "excluded_members": ["지혁"]
+  "excluded_members": ["지혁"],
+  "dual_excluded_members": ["이희준"]
 }

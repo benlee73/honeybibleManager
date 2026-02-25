@@ -706,10 +706,13 @@ if (mergeButton) {
     animateProgress();
 
     try {
+      const dualModeEl = document.querySelector('input[name="dualMode"]:checked');
+      const selectedDualMode = dualModeEl ? dualModeEl.value : "separate";
+
       const response = await fetch("/merge", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: "{}",
+        body: JSON.stringify({ dual_mode: selectedDualMode }),
       });
 
       progressCancelled = true;
@@ -732,6 +735,16 @@ if (mergeButton) {
         document.getElementById("mergeStatRooms").textContent = `${s.room_count}개 방`;
         document.getElementById("mergeStatBible").textContent = `성경일독 ${s.bible_count}명`;
         document.getElementById("mergeStatNt").textContent = `신약일독 ${s.nt_count}명`;
+        const dualStatEl = document.getElementById("mergeStatDual");
+        if (dualStatEl) {
+          if (s.dual_count) {
+            dualStatEl.textContent = `투트랙 ${s.dual_count}명`;
+            dualStatEl.hidden = false;
+          } else {
+            dualStatEl.textContent = "";
+            dualStatEl.hidden = true;
+          }
+        }
         mergeStats.hidden = false;
       }
 
@@ -763,7 +776,7 @@ if (mergeButton) {
 
       showResults(headers, rows, trackMode);
       downloadButton.href = currentObjectUrl;
-      downloadButton.download = data.filename || "꿀성경_통합_진도표.xlsx";
+      downloadButton.download = data.filename || "통합_꿀성경_진도표.xlsx";
       downloadButton.classList.remove("is-disabled");
       downloadButton.setAttribute("aria-disabled", "false");
 

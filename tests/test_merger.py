@@ -4,13 +4,17 @@ import os
 from unittest.mock import MagicMock, patch
 
 import pytest
-from openpyxl import load_workbook
+from openpyxl import Workbook, load_workbook
 
-from app.analyzer import build_output_xlsx
+from app.analyzer import COL_PAD, ROW_PAD, _apply_sheet_style, build_output_xlsx
 from app.merger import (
     _classify_education_users,
+    _compute_dual_stats,
+    _compute_stats,
     _extract_date_from_filename,
     _extract_room_from_filename,
+    _insert_stats_row,
+    _is_saturday,
     _load_education_config,
     build_merged_preview,
     build_merged_xlsx,
@@ -227,12 +231,12 @@ class TestBuildMergedXlsx:
         wb = load_workbook(io.BytesIO(xlsx_bytes))
         ws = wb["성경일독 진도표"]
 
-        # row 2 = 타이틀, row 3 = 헤더, row 4 = 데이터 (패딩 적용)
-        assert ws.cell(3, 2).value == "담당"
-        assert ws.cell(3, 3).value == "이름"
-        assert ws.cell(3, 4).value == "이모티콘"
-        assert ws.cell(4, 2).value == "방장A"
-        assert ws.cell(4, 3).value == "user1"
+        # row 2 = 타이틀, row 3 = 통계, row 4 = 헤더, row 5 = 데이터 (패딩 적용)
+        assert ws.cell(4, 2).value == "담당"
+        assert ws.cell(4, 3).value == "이름"
+        assert ws.cell(4, 4).value == "이모티콘"
+        assert ws.cell(5, 2).value == "방장A"
+        assert ws.cell(5, 3).value == "user1"
 
     def test_담당별_정렬(self):
         bible_users = {
@@ -243,17 +247,38 @@ class TestBuildMergedXlsx:
         wb = load_workbook(io.BytesIO(xlsx_bytes))
         ws = wb["성경일독 진도표"]
 
-        # row 2 = 타이틀, row 4~ = 데이터 (방장A가 먼저, 패딩 적용)
-        assert ws.cell(4, 2).value == "방장A"
-        assert ws.cell(5, 2).value == "방장B"
+        # row 2 = 타이틀, row 3 = 통계, row 4 = 헤더, row 5~ = 데이터 (방장A가 먼저)
+        assert ws.cell(5, 2).value == "방장A"
+        assert ws.cell(6, 2).value == "방장B"
 
     def test_빈_사용자__헤더만(self):
         xlsx_bytes = build_merged_xlsx({}, {})
         wb = load_workbook(io.BytesIO(xlsx_bytes))
         ws = wb["성경일독 진도표"]
-        # row 2 = 타이틀, row 3 = 헤더, row 4 = 데이터 없음 (패딩 적용)
-        assert ws.cell(3, 2).value == "담당"
-        assert ws.cell(4, 2).value is None
+        # row 2 = 타이틀, row 3 = 통계, row 4 = 헤더, row 5 = 데이터 없음
+        assert ws.cell(4, 2).value == "담당"
+        assert ws.cell(5, 2).value is None
+
+    def test_담당_셀_병합_후_아래_테두리_두꺼운_선(self):
+        bible_users = {
+            "user1": {"dates": {"2/2"}, "emoji": "😀", "leader": "방장A"},
+            "user2": {"dates": {"2/2"}, "emoji": "🔥", "leader": "방장A"},
+            "user3": {"dates": {"2/2"}, "emoji": "🌟", "leader": "방장B"},
+        }
+        xlsx_bytes = build_merged_xlsx(bible_users, {})
+        wb = load_workbook(io.BytesIO(xlsx_bytes))
+        ws = wb["성경일독 진도표"]
+
+        # row 2 = 타이틀, row 3 = 통계, row 4 = 헤더, row 5-6 = 방장A, row 7 = 방장B
+        leader_col = 2  # COL_PAD=1 → 담당 컬럼은 2
+
+        # 병합된 셀(방장A, row 5-6)의 상단 셀에 medium 아래 테두리
+        top_cell = ws.cell(5, leader_col)
+        assert top_cell.border.bottom.style == "medium"
+
+        # 병합 범위의 마지막 행(row 6)에도 medium 아래 테두리
+        bottom_cell = ws.cell(6, leader_col)
+        assert bottom_cell.border.bottom.style == "medium"
 
 
 class TestBuildMergedPreview:
@@ -277,6 +302,112 @@ class TestBuildMergedPreview:
     def test_빈_사용자__행_없음(self):
         headers, rows = build_merged_preview({}, {})
         assert len(rows) == 0
+
+
+class TestBuildMergedXlsxDualUsers:
+    def test_dual_users_전달시_3개_시트_생성(self):
+        bible_users = {
+            "user1": {"dates": {"2/2"}, "emoji": "😀", "leader": "방장A"},
+        }
+        nt_users = {
+            "user2": {"dates": {"2/3"}, "emoji": "🔥", "leader": "방장B"},
+        }
+        dual_users = {
+            "user3": {"dates_old": {"2/2"}, "dates_new": {"2/3"}, "emoji": "🎉", "leader": "방장C"},
+        }
+        xlsx_bytes = build_merged_xlsx(bible_users, nt_users, dual_users=dual_users)
+        wb = load_workbook(io.BytesIO(xlsx_bytes))
+
+        assert "성경일독 진도표" in wb.sheetnames
+        assert "신약일독 진도표" in wb.sheetnames
+        assert "투트랙 진도표" in wb.sheetnames
+
+    def test_dual_users_None__2개_시트_유지(self):
+        bible_users = {
+            "user1": {"dates": {"2/2"}, "emoji": "😀", "leader": "방장A"},
+        }
+        nt_users = {}
+        xlsx_bytes = build_merged_xlsx(bible_users, nt_users, dual_users=None)
+        wb = load_workbook(io.BytesIO(xlsx_bytes))
+
+        assert "성경일독 진도표" in wb.sheetnames
+        assert "신약일독 진도표" in wb.sheetnames
+        assert "투트랙 진도표" not in wb.sheetnames
+
+    def test_dual_users_빈_dict__2개_시트_유지(self):
+        xlsx_bytes = build_merged_xlsx({}, {}, dual_users={})
+        wb = load_workbook(io.BytesIO(xlsx_bytes))
+
+        assert len(wb.sheetnames) == 2
+        assert "투트랙 진도표" not in wb.sheetnames
+
+    def test_투트랙_시트_구약_신약_행_분리(self):
+        dual_users = {
+            "user1": {"dates_old": {"2/2"}, "dates_new": {"2/3"}, "emoji": "😀", "leader": "방장A"},
+        }
+        xlsx_bytes = build_merged_xlsx({}, {}, dual_users=dual_users)
+        wb = load_workbook(io.BytesIO(xlsx_bytes))
+        ws = wb["투트랙 진도표"]
+
+        # row 2 = 타이틀, row 3 = 통계, row 4 = 헤더, row 5-6 = 데이터
+        assert ws.cell(4, 2).value == "담당"
+        assert ws.cell(4, 3).value == "이름"
+        assert ws.cell(4, 4).value == "이모티콘"
+        assert ws.cell(4, 5).value == "트랙"
+        # 구약 행
+        assert ws.cell(5, 2).value == "방장A"
+        assert ws.cell(5, 3).value == "user1"
+        assert ws.cell(5, 5).value == "구약"
+        # 신약 행
+        assert ws.cell(6, 3).value == "user1"
+        assert ws.cell(6, 5).value == "신약"
+
+    def test_투트랙_시트_한쪽_트랙만_있는_사용자(self):
+        dual_users = {
+            "user1": {"dates_old": {"2/2"}, "dates_new": set(), "emoji": "😀", "leader": "방장A"},
+        }
+        xlsx_bytes = build_merged_xlsx({}, {}, dual_users=dual_users)
+        wb = load_workbook(io.BytesIO(xlsx_bytes))
+        ws = wb["투트랙 진도표"]
+
+        # row 2 = 타이틀, row 3 = 통계, row 4 = 헤더, row 5 = 데이터
+        # 구약 행만 존재
+        assert ws.cell(5, 3).value == "user1"
+        assert ws.cell(5, 5).value == "구약"
+        # 신약 행 없음
+        assert ws.cell(6, 3).value is None
+
+
+class TestBuildMergedPreviewDualUsers:
+    def test_dual_users_전달시_투트랙_구약신약_트랙_포함(self):
+        bible_users = {
+            "user1": {"dates": {"2/2"}, "emoji": "😀", "leader": "방장A"},
+        }
+        nt_users = {}
+        dual_users = {
+            "user2": {"dates_old": {"2/3"}, "dates_new": {"2/4"}, "emoji": "🔥", "leader": "방장C"},
+        }
+        headers, rows = build_merged_preview(bible_users, nt_users, dual_users=dual_users)
+
+        assert "트랙" in headers
+        tracks = [row[3] for row in rows]
+        assert "성경일독" in tracks
+        assert "투트랙(구약)" in tracks
+        assert "투트랙(신약)" in tracks
+
+    def test_dual_users_None__기존_동작(self):
+        bible_users = {
+            "user1": {"dates": {"2/2"}, "emoji": "😀", "leader": "방장A"},
+        }
+        nt_users = {
+            "user2": {"dates": {"2/3"}, "emoji": "🔥", "leader": "방장B"},
+        }
+        headers, rows = build_merged_preview(bible_users, nt_users, dual_users=None)
+
+        tracks = [row[3] for row in rows]
+        assert "투트랙(구약)" not in tracks
+        assert "투트랙(신약)" not in tracks
+        assert len(rows) == 2
 
 
 class TestMergeFiles:
@@ -321,7 +452,7 @@ class TestMergeFiles:
 
     @patch("app.merger.download_drive_file")
     @patch("app.merger.list_drive_files")
-    def test_듀얼_파일_양쪽_분배(self, mock_list, mock_download):
+    def test_듀얼_파일_split_모드__양쪽_분배(self, mock_list, mock_download):
         users = {"user1": {"dates_old": {"2/2"}, "dates_new": {"2/3"}, "emoji": "😀"}}
         meta = {"room_name": "dual방", "track_mode": "dual", "schedule_type": "dual", "leader": "방장"}
         xlsx_bytes = build_output_xlsx(users, track_mode="dual", meta=meta)
@@ -332,12 +463,34 @@ class TestMergeFiles:
         }
         mock_download.return_value = {"success": True, "data": xlsx_bytes, "name": "test.xlsx"}
 
-        result = merge_files()
+        result = merge_files(dual_mode="split")
         assert result["success"] is True
         assert "user1" in result["bible_users"]
         assert result["bible_users"]["user1"]["dates"] == {"2/2"}
         assert "user1" in result["nt_users"]
         assert result["nt_users"]["user1"]["dates"] == {"2/3"}
+        assert len(result["dual_users"]) == 0
+
+    @patch("app.merger.download_drive_file")
+    @patch("app.merger.list_drive_files")
+    def test_듀얼_파일_separate_모드__별도_시트_분리(self, mock_list, mock_download):
+        users = {"user1": {"dates_old": {"2/2"}, "dates_new": {"2/3"}, "emoji": "😀"}}
+        meta = {"room_name": "dual방", "track_mode": "dual", "schedule_type": "dual", "leader": "방장"}
+        xlsx_bytes = build_output_xlsx(users, track_mode="dual", meta=meta)
+
+        mock_list.return_value = {
+            "success": True,
+            "files": [{"id": "1", "name": "꿀성경_방장_20260210_1050_dual방.xlsx", "modifiedTime": "2026-02-10T10:50:00Z"}],
+        }
+        mock_download.return_value = {"success": True, "data": xlsx_bytes, "name": "test.xlsx"}
+
+        result = merge_files(dual_mode="separate")
+        assert result["success"] is True
+        assert len(result["bible_users"]) == 0
+        assert len(result["nt_users"]) == 0
+        assert "user1" in result["dual_users"]
+        assert result["dual_users"]["user1"]["dates_old"] == {"2/2"}
+        assert result["dual_users"]["user1"]["dates_new"] == {"2/3"}
 
     @patch("app.merger.download_drive_file")
     @patch("app.merger.list_drive_files")
@@ -415,3 +568,215 @@ class TestMergeFiles:
         assert result["success"] is True
         assert len(result["skipped_files"]) == 1
         assert "메타데이터 없음" in result["skipped_files"][0]["reason"]
+
+    @patch("app.merger.download_drive_file")
+    @patch("app.merger.list_drive_files")
+    def test_듀얼_separate_모드__dual_excluded_members_제외(self, mock_list, mock_download):
+        users = {
+            "이희준": {"dates_old": {"2/2"}, "dates_new": {"2/3"}, "emoji": "😀"},
+            "김철수": {"dates_old": {"2/2"}, "dates_new": {"2/3"}, "emoji": "🔥"},
+        }
+        meta = {"room_name": "dual방", "track_mode": "dual", "schedule_type": "dual", "leader": "방장"}
+        xlsx_bytes = build_output_xlsx(users, track_mode="dual", meta=meta)
+
+        mock_list.return_value = {
+            "success": True,
+            "files": [{"id": "1", "name": "꿀성경_방장_20260210_1050_dual방.xlsx", "modifiedTime": "2026-02-10T10:50:00Z"}],
+        }
+        mock_download.return_value = {"success": True, "data": xlsx_bytes, "name": "test.xlsx"}
+
+        result = merge_files(dual_mode="separate")
+        assert result["success"] is True
+        assert "이희준" not in result["dual_users"]
+        assert "김철수" in result["dual_users"]
+
+
+class TestIsSaturday:
+    def test_토요일__True(self):
+        # 2026-02-07은 토요일
+        assert _is_saturday("2/7") is True
+
+    def test_일요일__False(self):
+        # 2026-02-08은 일요일
+        assert _is_saturday("2/8") is False
+
+    def test_월요일__False(self):
+        # 2026-02-09은 월요일
+        assert _is_saturday("2/9") is False
+
+    def test_금요일__False(self):
+        # 2026-02-06은 금요일
+        assert _is_saturday("2/6") is False
+
+
+class TestComputeStats:
+    def test_전원_완독(self):
+        users = {
+            "user1": {"dates": {"2/2", "2/3"}, "emoji": "😀", "leader": ""},
+            "user2": {"dates": {"2/2", "2/3"}, "emoji": "🔥", "leader": ""},
+        }
+        result = _compute_stats(users, ["2/2", "2/3"])
+        assert "진행: 2일" in result
+        assert "참여: 2명" in result
+        assert "완독: 2명 (100%)" in result
+
+    def test_일부_완독(self):
+        users = {
+            "user1": {"dates": {"2/2", "2/3"}, "emoji": "😀", "leader": ""},
+            "user2": {"dates": {"2/2"}, "emoji": "🔥", "leader": ""},
+        }
+        result = _compute_stats(users, ["2/2", "2/3"])
+        assert "완독: 1명 (50%)" in result
+
+    def test_완독_0명(self):
+        users = {
+            "user1": {"dates": {"2/2"}, "emoji": "😀", "leader": ""},
+        }
+        result = _compute_stats(users, ["2/2", "2/3"])
+        assert "완독: 0명 (0%)" in result
+
+    def test_참여자_없음(self):
+        users = {
+            "user1": {"dates": set(), "emoji": "😀", "leader": ""},
+        }
+        result = _compute_stats(users, ["2/2"])
+        assert "참여: 0명" in result
+        assert "완독: 0명 (0%)" in result
+
+
+class TestComputeDualStats:
+    def test_양쪽_완독(self):
+        dual_users = {
+            "user1": {"dates_old": {"2/2", "2/3"}, "dates_new": {"2/4", "2/5"}, "emoji": "😀"},
+        }
+        result = _compute_dual_stats(dual_users, ["2/2", "2/3", "2/4", "2/5"])
+        assert "참여: 1명" in result
+        assert "완독: 1명" in result
+
+    def test_구약만_완독__완독_아님(self):
+        # user1은 구약 다 했지만 신약 일부 누락, user2는 양쪽 다 했음
+        dual_users = {
+            "user1": {"dates_old": {"2/2", "2/3"}, "dates_new": {"2/4"}, "emoji": "😀"},
+            "user2": {"dates_old": {"2/2", "2/3"}, "dates_new": {"2/4", "2/5"}, "emoji": "🔥"},
+        }
+        # all_old={2/2,2/3}, all_new={2/4,2/5}
+        # user1: old ✓, new {2/4} < {2/4,2/5} ✗ → 미완독
+        # user2: old ✓, new ✓ → 완독
+        result = _compute_dual_stats(dual_users, ["2/2", "2/3", "2/4", "2/5"])
+        assert "완독: 1명" in result
+
+    def test_신약만_완독__완독_아님(self):
+        # user1은 신약 다 했지만 구약 일부 누락, user2는 양쪽 다 했음
+        dual_users = {
+            "user1": {"dates_old": {"2/2"}, "dates_new": {"2/4", "2/5"}, "emoji": "😀"},
+            "user2": {"dates_old": {"2/2", "2/3"}, "dates_new": {"2/4", "2/5"}, "emoji": "🔥"},
+        }
+        # all_old={2/2,2/3}, all_new={2/4,2/5}
+        # user1: old {2/2} < {2/2,2/3} ✗ → 미완독
+        # user2: old ✓, new ✓ → 완독
+        result = _compute_dual_stats(dual_users, ["2/2", "2/3", "2/4", "2/5"])
+        assert "완독: 1명" in result
+
+    def test_토요일_제외_구약_완독(self):
+        # 2/7은 토요일 → 구약 expected에서 제외
+        dual_users = {
+            "user1": {
+                "dates_old": {"2/2", "2/3"},  # 2/7(토) 없어도 완독
+                "dates_new": {"2/4", "2/5"},
+                "emoji": "😀",
+            },
+        }
+        # 전체 날짜에 2/7 포함하지만, 구약 expected에서 토요일 제외
+        # all_old = {2/2, 2/3}, all_new = {2/4, 2/5}
+        # old_expected = {2/2, 2/3} (토요일 없음)
+        result = _compute_dual_stats(dual_users, ["2/2", "2/3", "2/4", "2/5"])
+        assert "완독: 1명" in result
+
+    def test_토요일_포함_구약__토요일_제외로_완독(self):
+        # 다른 사용자가 토요일도 했으면 all_old에 포함되지만 expected에서는 제외
+        dual_users = {
+            "user1": {
+                "dates_old": {"2/2", "2/3"},
+                "dates_new": {"2/4", "2/5"},
+                "emoji": "😀",
+            },
+            "user2": {
+                "dates_old": {"2/2", "2/3", "2/7"},  # 2/7 토요일 포함
+                "dates_new": {"2/4", "2/5"},
+                "emoji": "🔥",
+            },
+        }
+        result = _compute_dual_stats(dual_users, ["2/2", "2/3", "2/4", "2/5", "2/7"])
+        # old_expected = {2/2, 2/3} (2/7 토요일 제외), new_expected = {2/4, 2/5}
+        # user1: old >= {2/2, 2/3} ✓, new >= {2/4, 2/5} ✓ → 완독
+        # user2: old >= {2/2, 2/3} ✓, new >= {2/4, 2/5} ✓ → 완독
+        assert "참여: 2명" in result
+        assert "완독: 2명" in result
+
+
+class TestInsertStatsRow:
+    def test_삽입_후_row3에_통계_텍스트(self):
+        wb = Workbook()
+        ws = wb.active
+        headers = ["담당", "이름", "이모티콘", "2/2"]
+        rows = [["방장", "user1", "😀", "O"]]
+        _apply_sheet_style(ws, headers, rows, leader_col=1, title="테스트 타이틀")
+
+        _insert_stats_row(ws, "진행: 1일 | 참여: 1명 | 완독: 1명 (100%)", len(headers))
+
+        # stats row는 row 3에 삽입됨
+        stats_row = 2 + ROW_PAD  # = 3
+        assert ws.cell(stats_row, 1 + COL_PAD).value == "진행: 1일 | 참여: 1명 | 완독: 1명 (100%)"
+
+    def test_freeze_panes_변경(self):
+        wb = Workbook()
+        ws = wb.active
+        headers = ["담당", "이름", "이모티콘"]
+        rows = []
+        _apply_sheet_style(ws, headers, rows, leader_col=1, title="테스트")
+
+        assert ws.freeze_panes == "B4"
+        _insert_stats_row(ws, "통계", len(headers))
+        assert ws.freeze_panes == "B5"
+
+
+class TestBuildMergedSheetStats:
+    def test_성경일독_시트_통계_행_포함(self):
+        bible_users = {
+            "user1": {"dates": {"2/2", "2/3"}, "emoji": "😀", "leader": "방장A"},
+            "user2": {"dates": {"2/2"}, "emoji": "🔥", "leader": "방장A"},
+        }
+        xlsx_bytes = build_merged_xlsx(bible_users, {})
+        wb = load_workbook(io.BytesIO(xlsx_bytes))
+        ws = wb["성경일독 진도표"]
+
+        # row 2 = 타이틀, row 3 = 통계, row 4 = 헤더, row 5~ = 데이터
+        stats_cell = ws.cell(3, 2)  # COL_PAD=1 → column 2
+        assert stats_cell.value is not None
+        assert "진행:" in stats_cell.value
+        assert "참여:" in stats_cell.value
+        assert "완독:" in stats_cell.value
+
+    def test_투트랙_시트_통계_행_포함(self):
+        dual_users = {
+            "user1": {"dates_old": {"2/2"}, "dates_new": {"2/3"}, "emoji": "😀", "leader": "방장A"},
+        }
+        xlsx_bytes = build_merged_xlsx({}, {}, dual_users=dual_users)
+        wb = load_workbook(io.BytesIO(xlsx_bytes))
+        ws = wb["투트랙 진도표"]
+
+        stats_cell = ws.cell(3, 2)
+        assert stats_cell.value is not None
+        assert "진행:" in stats_cell.value
+
+    def test_신약일독_시트_통계_행_포함(self):
+        nt_users = {
+            "user1": {"dates": {"2/2"}, "emoji": "😀", "leader": "방장A"},
+        }
+        xlsx_bytes = build_merged_xlsx({}, nt_users)
+        wb = load_workbook(io.BytesIO(xlsx_bytes))
+        ws = wb["신약일독 진도표"]
+
+        stats_cell = ws.cell(3, 2)
+        assert stats_cell.value is not None
+        assert "진행:" in stats_cell.value
