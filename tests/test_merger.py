@@ -15,7 +15,6 @@ from app.merger import (
     _extract_date_from_filename,
     _extract_room_from_filename,
     _insert_stats_row,
-    _is_saturday,
     load_education_config as _load_education_config,
     build_merged_preview,
     build_merged_xlsx,
@@ -615,23 +614,6 @@ class TestMergeFiles:
         assert "김철수" in result["dual_users"]
 
 
-class TestIsSaturday:
-    def test_토요일__True(self):
-        # 2026-02-07은 토요일
-        assert _is_saturday("2/7") is True
-
-    def test_일요일__False(self):
-        # 2026-02-08은 일요일
-        assert _is_saturday("2/8") is False
-
-    def test_월요일__False(self):
-        # 2026-02-09은 월요일
-        assert _is_saturday("2/9") is False
-
-    def test_금요일__False(self):
-        # 2026-02-06은 금요일
-        assert _is_saturday("2/6") is False
-
 
 class TestFormatSheetStats:
     def test_전원_완독(self):
@@ -716,8 +698,8 @@ class TestComputeDualStats:
         result = _compute_dual_stats(dual_users, ["2/2", "2/3", "2/4", "2/5"])
         assert "완독: 1명" in result
 
-    def test_토요일_포함_구약__토요일_제외로_완독(self):
-        # 다른 사용자가 토요일도 했으면 all_old에 포함되지만 expected에서는 제외
+    def test_토요일_포함_구약__토요일도_기대에_포함(self):
+        # 구약은 월~토 읽기이므로 토요일도 완독 기준에 포함
         dual_users = {
             "user1": {
                 "dates_old": {"2/2", "2/3"},
@@ -731,11 +713,11 @@ class TestComputeDualStats:
             },
         }
         result = _compute_dual_stats(dual_users, ["2/2", "2/3", "2/4", "2/5", "2/7"])
-        # old_expected = {2/2, 2/3} (2/7 토요일 제외), new_expected = {2/4, 2/5}
-        # user1: old >= {2/2, 2/3} ✓, new >= {2/4, 2/5} ✓ → 완독
-        # user2: old >= {2/2, 2/3} ✓, new >= {2/4, 2/5} ✓ → 완독
+        # old_expected = {2/2, 2/3, 2/7} (토요일 포함), new_expected = {2/4, 2/5}
+        # user1: old {2/2, 2/3} < {2/2, 2/3, 2/7} → 미완독
+        # user2: old {2/2, 2/3, 2/7} ✓, new {2/4, 2/5} ✓ → 완독
         assert "참여: 2명" in result
-        assert "완독: 2명" in result
+        assert "완독: 1명" in result
 
 
 class TestInsertStatsRow:

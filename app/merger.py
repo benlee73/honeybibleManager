@@ -1,4 +1,3 @@
-import datetime
 import io
 import json
 import os
@@ -271,11 +270,6 @@ def _merge_dual_user_into(target, user, dates_old, dates_new, emoji, leader):
         }
 
 
-def _is_saturday(md_str):
-    """'M/D' 문자열이 2026년 기준 토요일인지 판별한다."""
-    month, day = md_str.split("/")
-    return datetime.date(2026, int(month), int(day)).weekday() == 5
-
 
 def _format_sheet_stats(users, all_dates_sorted):
     """성경일독/신약일독 시트용 통계 문자열을 생성한다."""
@@ -290,7 +284,7 @@ def _format_sheet_stats(users, all_dates_sorted):
 def _compute_dual_stats(dual_users, all_dates_sorted):
     """투트랙 시트용 통계 문자열을 생성한다.
 
-    완독 기준: 구약(토요일 제외) AND 신약 모두 완독.
+    완독 기준: 구약(월~토) AND 신약(월~금) 모두 완독.
     """
     num_dates = len(all_dates_sorted)
     num_members = len(dual_users)
@@ -299,7 +293,7 @@ def _compute_dual_stats(dual_users, all_dates_sorted):
     for data in dual_users.values():
         all_old.update(data["dates_old"])
         all_new.update(data["dates_new"])
-    old_expected = {d for d in all_old if not _is_saturday(d)}
+    old_expected = all_old
     new_expected = all_new
     num_perfect = sum(
         1 for data in dual_users.values()
