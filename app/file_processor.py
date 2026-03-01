@@ -150,8 +150,6 @@ def detect_schedule_type(rows, room_name, track_mode):
         return "dual"
     if room_name and "교육국" in room_name:
         return "education"
-    if any("교육국" in msg for _, msg in rows):
-        return "education"
     schedule = detect_schedule(rows)
     if schedule is BIBLE_DATES:
         return "bible"

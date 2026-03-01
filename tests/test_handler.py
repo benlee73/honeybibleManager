@@ -439,9 +439,10 @@ class TestDetectScheduleType:
         rows = [("user1", "마태복음 1장"), ("user2", "마가복음 2장")]
         assert _detect_schedule_type(rows, "일반방", "single") == "nt"
 
-    def test_메시지에_교육국_포함__education_반환(self):
-        rows = [("user1", "꿀성경 교육국 방입니다!"), ("user2", "창세기 1장")]
-        assert _detect_schedule_type(rows, "일반방", "single") == "education"
+    def test_메시지에_교육국_포함__방이름_아니면_무시(self):
+        # 방이름에 "교육국"이 없으면 메시지 내용은 무시 → bible로 분류
+        rows = [("user1", "교육국 홍지혜입니다!"), ("user2", "창세기 1장")]
+        assert _detect_schedule_type(rows, "일반방", "single") == "bible"
 
     def test_키워드_없음__unknown_반환(self):
         rows = [("user1", "안녕하세요")]
