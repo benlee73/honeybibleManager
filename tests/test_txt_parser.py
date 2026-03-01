@@ -114,6 +114,33 @@ class TestParseTxt:
         assert len(rows) == 1
         assert rows[0] == ("홍길동", "사진")
 
+    def test_24시간제_사용자_메시지_파싱(self):
+        text = "2026. 2. 1. 20:21, 홍길동 : 2/1🐷\r\n"
+        rows = parse_txt(text)
+        assert len(rows) == 1
+        assert rows[0] == ("홍길동", "2/1🐷")
+
+    def test_24시간제_시스템_메시지_스킵(self):
+        text = (
+            "2026. 2. 1. 20:21: 홍길동님이 김철수님을 초대했습니다.\r\n"
+            "2026. 2. 1. 20:22, 홍길동 : 2/1🐷\r\n"
+        )
+        rows = parse_txt(text)
+        assert len(rows) == 1
+        assert rows[0][0] == "홍길동"
+
+    def test_24시간제_여러_사용자_메시지(self):
+        text = (
+            "2026. 2. 2. 07:33, 홍길동 : 2/2🐷\r\n"
+            "2026. 2. 2. 08:00, 김철수 : 2/2🦊\r\n"
+            "2026. 2. 2. 21:00, 이영희 : 2/2❄️\r\n"
+        )
+        rows = parse_txt(text)
+        assert len(rows) == 3
+        assert rows[0][0] == "홍길동"
+        assert rows[1][0] == "김철수"
+        assert rows[2][0] == "이영희"
+
 
 class TestExtractChatMeta:
     def test_정상_헤더__방이름_및_날짜_추출(self):
@@ -151,6 +178,14 @@ class TestExtractChatMeta:
         )
         meta = extract_chat_meta(text)
         assert meta["saved_date"] == "2026/02/10-00:30"
+
+    def test_24시간제_저장날짜_추출(self):
+        text = (
+            "꿀성경 방 님과 카카오톡 대화\r\n"
+            "저장한 날짜 : 2026. 3. 1. 08:11\r\n"
+        )
+        meta = extract_chat_meta(text)
+        assert meta["saved_date"] == "2026/03/01-08:11"
 
     def test_헤더_없는_텍스트__None_반환(self):
         text = "2026. 2. 2. 오전 7:33, 홍길동 : 2/2🐷\r\n"

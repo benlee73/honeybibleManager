@@ -22,7 +22,7 @@ logger = get_logger("analyzer")
 
 MAX_DATES_PER_MESSAGE = 14
 
-_STRIP_WORDS = ("광천", "누나", "오빠", "언니", " 형")
+_STRIP_WORDS = ("맑은샘", "광천", "누나", "오빠", "언니", " 형")
 _STRIP_SUFFIXES = ()
 
 
