@@ -22,11 +22,34 @@ from app.merger import (
     merge_files,
     read_meta_from_xlsx,
     read_users_from_xlsx,
+    resolve_alias,
+    resolve_leader_override,
     select_latest_per_room,
 )
 
 
-class TestExtractDateFromFilename:
+class TestResolveAlias:
+    def test_정확_일치__변환(self):
+        aliases = {"태환": "김태환", "지혜": "홍지혜"}
+        assert resolve_alias("태환", aliases) == "김태환"
+
+    def test_정확_일치__별칭_등록된_이름_변환(self):
+        aliases = {"조갑경": "조가빈", "영보조갑경": "조가빈"}
+        assert resolve_alias("영보조갑경", aliases) == "조가빈"
+
+    def test_매칭_없음__원래_이름_반환(self):
+        aliases = {"태환": "김태환"}
+        assert resolve_alias("김철수", aliases) == "김철수"
+
+    def test_정확_일치_우선(self):
+        aliases = {"태환": "김태환", "태": "다른사람"}
+        assert resolve_alias("태환", aliases) == "김태환"
+
+    def test_빈_별칭__원래_이름_반환(self):
+        assert resolve_alias("김철수", {}) == "김철수"
+
+
+
     def test_정상_파일명__날짜시간_추출(self):
         assert _extract_date_from_filename("꿀성경_방장_20260210_1050_방이름.xlsx") == "20260210_1050"
 
@@ -636,12 +659,12 @@ class TestFormatSheetStats:
         result = _format_sheet_stats(users, ["2/2", "2/3"])
         assert "완독: 0명 (0%)" in result
 
-    def test_참여자_없음(self):
+    def test_날짜_없는_멤버__전체_인원에_포함(self):
         users = {
             "user1": {"dates": set(), "emoji": "😀", "leader": ""},
         }
         result = _format_sheet_stats(users, ["2/2"])
-        assert "참여: 0명" in result
+        assert "참여: 1명" in result
         assert "완독: 0명 (0%)" in result
 
 
@@ -781,3 +804,121 @@ class TestBuildMergedSheetStats:
         stats_cell = ws.cell(3, 2)
         assert stats_cell.value is not None
         assert "진행:" in stats_cell.value
+
+
+class TestMergeFilesRoomMembers:
+    @patch("app.merger.download_drive_file")
+    @patch("app.merger.list_drive_files")
+    def test_room_members_누락_멤버_통합_결과에_포함(self, mock_list, mock_download):
+        """room_members에 등록된 멤버 중 XLSX에 없는 인원이 빈 날짜로 통합 결과에 포함된다."""
+        users = {"참여자A": {"dates": {"2/2"}, "emoji": "😀"}}
+        meta = {"room_name": "방1", "track_mode": "single", "schedule_type": "bible", "leader": "태환"}
+        xlsx_bytes = build_output_xlsx(users, track_mode="single", meta=meta)
+
+        mock_list.return_value = {
+            "success": True,
+            "files": [{"id": "1", "name": "꿀성경_태환_20260210_1050_방1.xlsx", "modifiedTime": "2026-02-10T10:50:00Z"}],
+        }
+        mock_download.return_value = {"success": True, "data": xlsx_bytes, "name": "test.xlsx"}
+
+        edu_config = {
+            "nt_members": [],
+            "excluded_members": [],
+            "name_aliases": {"태환": "김태환"},
+            "room_members": {
+                "김태환": ["참여자A", "미참여자B"],
+            },
+        }
+
+        with patch("app.merger.load_education_config", return_value=edu_config):
+            result = merge_files()
+
+        assert result["success"] is True
+        assert "참여자A" in result["bible_users"]
+        assert "미참여자B" in result["bible_users"]
+        assert result["bible_users"]["참여자A"]["dates"] == {"2/2"}
+        assert result["bible_users"]["미참여자B"]["dates"] == set()
+
+    @patch("app.merger.download_drive_file")
+    @patch("app.merger.list_drive_files")
+    def test_room_members_excluded_멤버는_재추가되지_않음(self, mock_list, mock_download):
+        """room_members에 등록되어 있어도 excluded_members인 경우 통합 결과에서 제외된다."""
+        users = {"참여자A": {"dates": {"2/2"}, "emoji": "😀"}}
+        meta = {"room_name": "방1", "track_mode": "single", "schedule_type": "bible", "leader": "태환"}
+        xlsx_bytes = build_output_xlsx(users, track_mode="single", meta=meta)
+
+        mock_list.return_value = {
+            "success": True,
+            "files": [{"id": "1", "name": "꿀성경_태환_20260210_1050_방1.xlsx", "modifiedTime": "2026-02-10T10:50:00Z"}],
+        }
+        mock_download.return_value = {"success": True, "data": xlsx_bytes, "name": "test.xlsx"}
+
+        edu_config = {
+            "nt_members": [],
+            "excluded_members": ["제외자"],
+            "name_aliases": {"태환": "김태환"},
+            "room_members": {
+                "김태환": ["참여자A", "제외자C"],
+            },
+        }
+
+        with patch("app.merger.load_education_config", return_value=edu_config):
+            result = merge_files()
+
+        assert result["success"] is True
+        assert "참여자A" in result["bible_users"]
+        # "제외자C"는 "제외자" 키워드 포함 → excluded_members에 의해 제거
+        assert "제외자C" not in result["bible_users"]
+
+
+class TestResolveLeaderOverride:
+    def test_매칭_조건_충족__actual_반환(self):
+        users = {"강민정": {"dates": set()}, "김태현": {"dates": set()}, "홍길동": {"dates": set()}}
+        overrides = [{"detected": "원예진", "markers": ["강민정", "김태현"], "actual": "이찬영"}]
+        assert resolve_leader_override("원예진", users, overrides) == "이찬영"
+
+    def test_markers_일부만_존재__오버라이드_안함(self):
+        users = {"강민정": {"dates": set()}, "홍길동": {"dates": set()}}
+        overrides = [{"detected": "원예진", "markers": ["강민정", "김태현"], "actual": "이찬영"}]
+        assert resolve_leader_override("원예진", users, overrides) == "원예진"
+
+    def test_detected_불일치__원래_leader_반환(self):
+        users = {"강민정": {"dates": set()}, "김태현": {"dates": set()}}
+        overrides = [{"detected": "원예진", "markers": ["강민정", "김태현"], "actual": "이찬영"}]
+        assert resolve_leader_override("김태환", users, overrides) == "김태환"
+
+    def test_overrides_빈_리스트__원래_leader_반환(self):
+        users = {"강민정": {"dates": set()}}
+        assert resolve_leader_override("원예진", users, []) == "원예진"
+
+
+class TestBuildMergedSheetEmptyDates:
+    def test_빈_날짜_사용자_통합_시트에_포함(self):
+        """dates가 빈 사용자도 통합 시트에 행으로 포함된다."""
+        bible_users = {
+            "참여자A": {"dates": {"2/2"}, "emoji": "😀", "leader": "방장A"},
+            "미참여자B": {"dates": set(), "emoji": "", "leader": "방장A"},
+        }
+        xlsx_bytes = build_merged_xlsx(bible_users, {})
+        wb = load_workbook(io.BytesIO(xlsx_bytes))
+        ws = wb["성경일독 진도표"]
+
+        # row 2 = 타이틀, row 3 = 통계, row 4 = 헤더, row 5~ = 데이터
+        user_names = []
+        for r in range(5, ws.max_row + 1):
+            val = ws.cell(r, 3).value  # 이름 컬럼 (COL_PAD=1)
+            if val:
+                user_names.append(val)
+        assert "참여자A" in user_names
+        assert "미참여자B" in user_names
+
+    def test_빈_날짜_사용자_미리보기에_포함(self):
+        """dates가 빈 사용자도 미리보기에 행으로 포함된다."""
+        bible_users = {
+            "참여자A": {"dates": {"2/2"}, "emoji": "😀", "leader": "방장A"},
+            "미참여자B": {"dates": set(), "emoji": "", "leader": "방장A"},
+        }
+        headers, rows = build_merged_preview(bible_users, {})
+        user_names = [row[1] for row in rows]
+        assert "참여자A" in user_names
+        assert "미참여자B" in user_names

@@ -18,6 +18,21 @@ logger = get_logger("merger")
 _CONFIG_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "education_config.json")
 
 
+def resolve_alias(name: str, aliases: dict) -> str:
+    """이름을 별칭으로 변환한다. 정확 일치만 사용."""
+    return aliases.get(name, name)
+
+
+def resolve_leader_override(leader: str, users: dict, overrides: list) -> str:
+    """참여자 기반으로 담당자를 오버라이드한다."""
+    for rule in overrides:
+        if leader == rule.get("detected", ""):
+            markers = rule.get("markers", [])
+            if markers and all(m in users for m in markers):
+                return rule["actual"]
+    return leader
+
+
 def load_education_config():
     """education_config.json을 로드한다. 파일 없으면 빈 설정 반환."""
     try:
@@ -266,9 +281,8 @@ def _format_sheet_stats(users, all_dates_sorted):
     """성경일독/신약일독 시트용 통계 문자열을 생성한다."""
     all_dates_set = set(all_dates_sorted)
     num_dates = len(all_dates_sorted)
-    members = [u for u in users if users[u]["dates"]]
-    num_members = len(members)
-    num_perfect = sum(1 for u in members if users[u]["dates"] >= all_dates_set)
+    num_members = len(users)
+    num_perfect = sum(1 for u in users if users[u]["dates"] >= all_dates_set)
     rate = (num_perfect / num_members * 100) if num_members else 0
     return f"진행: {num_dates}일 | 참여: {num_members}명 | 완독: {num_perfect}명 ({rate:.0f}%)"
 
@@ -407,12 +421,23 @@ def merge_files(dual_mode="separate"):
         # 사용자 데이터 추출
         users = read_users_from_xlsx(xlsx_bytes, track_mode)
 
-        # 리더 이름 → 본명 변환 (담당자 이름이 약칭으로 저장된 경우 통합)
-        leader_name_map = edu_config.get("leader_name_map", {})
-        if leader in leader_name_map:
-            full_name = leader_name_map[leader]
-            users = {(full_name if u == leader else u): d for u, d in users.items()}
-            logger.info("리더 이름 변환: %s → %s (%s)", leader, full_name, file_name)
+        # 이름 통일: 약칭 → 본명 변환 (모든 참여자에 적용)
+        name_aliases = edu_config.get("name_aliases", {})
+        if name_aliases:
+            users = {resolve_alias(u, name_aliases): d for u, d in users.items()}
+
+        # room_members에서 리더 이름으로 멤버 목록 조회, 누락 멤버 빈 날짜로 추가
+        canonical_leader = resolve_alias(leader, name_aliases) if leader else leader
+        leader_overrides = edu_config.get("leader_overrides", [])
+        canonical_leader = resolve_leader_override(canonical_leader, users, leader_overrides)
+        room_members_cfg = edu_config.get("room_members", {})
+        members_list = room_members_cfg.get(canonical_leader, [])
+        for member in members_list:
+            if member not in users:
+                if track_mode == "dual":
+                    users[member] = {"dates_old": set(), "dates_new": set(), "emoji": ""}
+                else:
+                    users[member] = {"dates": set(), "emoji": ""}
 
         # 전역 제외 멤버 필터링 (모든 room 타입에 적용)
         global_excluded = edu_config.get("excluded_members", [])
@@ -568,8 +593,6 @@ def _build_merged_sheet(ws, users, title=None):
     rows = []
     for user in sorted_users:
         data = users[user]
-        if not data["dates"]:
-            continue
         row = [data.get("leader", ""), user, data["emoji"]]
         row.extend("O" if d in data["dates"] else "" for d in all_dates_sorted)
         rows.append(row)
@@ -635,8 +658,6 @@ def build_merged_preview(bible_users, nt_users, dual_users=None):
     # 성경일독
     for user in sorted(bible_users.keys(), key=lambda u: (bible_users[u].get("leader", ""), u)):
         data = bible_users[user]
-        if not data["dates"]:
-            continue
         row = [data.get("leader", ""), user, data["emoji"], "성경일독"]
         row.extend("O" if d in data["dates"] else "" for d in all_dates_sorted)
         rows.append(row)
@@ -644,8 +665,6 @@ def build_merged_preview(bible_users, nt_users, dual_users=None):
     # 신약일독
     for user in sorted(nt_users.keys(), key=lambda u: (nt_users[u].get("leader", ""), u)):
         data = nt_users[user]
-        if not data["dates"]:
-            continue
         row = [data.get("leader", ""), user, data["emoji"], "신약일독"]
         row.extend("O" if d in data["dates"] else "" for d in all_dates_sorted)
         rows.append(row)

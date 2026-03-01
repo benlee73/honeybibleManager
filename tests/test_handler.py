@@ -921,3 +921,55 @@ class TestAnalyzeEndpointWithExtraSamples:
         xlsx_bytes = base64.b64decode(data["xlsx_base64"])
         assert len(xlsx_bytes) > 0
         assert xlsx_bytes[:2] == b"PK"
+
+
+class TestRoomMembers:
+    def test_room_members_설정시_미참여_멤버_결과에_포함(self, test_server):
+        """room_members에 등록된 멤버 중 메시지를 보내지 않은 인원이 빈 행으로 포함되는지 테스트."""
+        csv_data = (
+            "Date,User,Message\n"
+            "2026-02-10,홍길동,꿀성경 진행 방식 안내\n"
+            "2026-02-10,참여자A,1/6 ❤️\n"
+        ).encode("utf-8")
+
+        edu_config = {
+            "nt_members": [],
+            "excluded_members": [],
+            "name_aliases": {"길동": "홍길동"},
+            "room_members": {
+                "홍길동": ["참여자A", "미참여자B", "미참여자C"],
+            },
+        }
+
+        with patch("app.handler.load_education_config", return_value=edu_config):
+            body, content_type = _make_analyze_payload("chat.csv", csv_data)
+            req = Request(
+                f"{test_server}/analyze",
+                data=body,
+                headers={"Content-Type": content_type},
+                method="POST",
+            )
+            resp = urlopen(req)
+            assert resp.status == 200
+            data = json.loads(resp.read())
+            preview_rows = data["preview"]["rows"]
+            user_names = [row[0] for row in preview_rows]
+            assert "참여자A" in user_names
+            assert "미참여자B" in user_names
+            assert "미참여자C" in user_names
+
+    def test_room_members_미설정시_기존_동작_유지(self, test_server):
+        """room_members가 없으면 메시지를 보낸 사용자만 결과에 포함된다."""
+        body, content_type = _make_analyze_payload("chat.csv", _CSV_DATA)
+        req = Request(
+            f"{test_server}/analyze",
+            data=body,
+            headers={"Content-Type": content_type},
+            method="POST",
+        )
+        resp = urlopen(req)
+        assert resp.status == 200
+        data = json.loads(resp.read())
+        preview_rows = data["preview"]["rows"]
+        # 메시지를 보낸 사용자만 포함 (방장 공지 제외)
+        assert len(preview_rows) >= 1

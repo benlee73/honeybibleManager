@@ -64,10 +64,17 @@ education_config.json  # 교육국 멤버 분류 설정 (신약일독/미참여)
 
 ```json
 {
-  "nt_members": ["지혜", "찬영"],
-  "excluded_members": ["지혁"]
+  "nt_members": ["홍지혜", "이찬영"],
+  "excluded_members": ["지혁"],
+  "dual_excluded_members": ["이희준"],
+  "name_aliases": {"태환": "김태환", ...},
+  "room_members": {
+    "김태환": ["김치훈", "원유관", ...]
+  }
 }
 ```
+
+- `room_members`: 방장(leader) 이름을 키로 방별 전체 멤버 목록을 등록한다. 분석 후 등록된 멤버 중 결과에 누락된 인원을 빈 날짜로 추가하여 미참여 멤버도 진도표에 포함시킨다.
 
 ### XLSX 메타데이터 시트
 

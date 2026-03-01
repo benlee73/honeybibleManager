@@ -225,14 +225,14 @@ class TestBuildOutputCsv:
         assert user2_row[0] == "user2"
         assert user2_row[2:] == ["O", "", "O", ""]
 
-    def test_build_output_csv__user_with_no_dates__excluded(self):
+    def test_build_output_csv__user_with_no_dates__빈_행으로_포함(self):
         users = {
             "user1": {"dates": set(), "emoji": "😀"},
             "user2": {"dates": {"3/15"}, "emoji": "🔥"},
         }
         output = build_output_csv(users)
         text = output.decode("utf-8-sig")
-        assert "user1" not in text
+        assert "user1" in text
         assert "user2" in text
 
     def test_build_output_csv__bom_encoding__present(self):
@@ -498,14 +498,16 @@ class TestBuildPreviewData:
         assert headers == ["이름", "이모티콘"]
         assert rows == []
 
-    def test_build_preview_data__빈_날짜_사용자_제외(self):
+    def test_build_preview_data__빈_날짜_사용자_포함(self):
         users = {
             "user1": {"dates": set(), "emoji": "😀"},
             "user2": {"dates": {"3/15"}, "emoji": "🔥"},
         }
         headers, rows = build_preview_data(users)
-        assert len(rows) == 1
-        assert rows[0][0] == "user2"
+        assert len(rows) == 2
+        user_names = [r[0] for r in rows]
+        assert "user1" in user_names
+        assert "user2" in user_names
 
     def test_build_preview_data__O_마크_정확(self):
         users = {

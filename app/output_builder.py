@@ -38,10 +38,7 @@ def build_output_csv(users, track_mode="single"):
         header.extend(all_dates_sorted)
         writer.writerow(header)
 
-        all_users = sorted(
-            u for u, e in users.items()
-            if e.get("dates_old") or e.get("dates_new")
-        )
+        all_users = sorted(users.keys())
         for user in all_users:
             entry = users[user]
             if entry.get("dates_old"):
@@ -52,13 +49,13 @@ def build_output_csv(users, track_mode="single"):
                 row = [user, entry.get("emoji", ""), "신약"]
                 row.extend("O" if d in entry["dates_new"] else "" for d in all_dates_sorted)
                 writer.writerow(row)
+            if not entry.get("dates_old") and not entry.get("dates_new"):
+                row = [user, entry.get("emoji", ""), ""]
+                row.extend("" for _ in all_dates_sorted)
+                writer.writerow(row)
     else:
-        user_dates = {}
         all_dates = set()
-        for user, entry in users.items():
-            if not entry["dates"]:
-                continue
-            user_dates[user] = entry["dates"]
+        for entry in users.values():
             all_dates.update(entry["dates"])
 
         all_dates_sorted = sort_dates(all_dates)
@@ -67,11 +64,10 @@ def build_output_csv(users, track_mode="single"):
         header.extend(all_dates_sorted)
         writer.writerow(header)
 
-        for user in sorted(user_dates.keys()):
+        for user in sorted(users.keys()):
             entry = users[user]
-            date_set = user_dates[user]
             row = [user, entry.get("emoji", "")]
-            row.extend("O" if d in date_set else "" for d in all_dates_sorted)
+            row.extend("O" if d in entry["dates"] else "" for d in all_dates_sorted)
             writer.writerow(row)
 
     return output.getvalue().encode("utf-8-sig")
@@ -89,10 +85,7 @@ def build_preview_data(users, track_mode="single"):
         headers.extend(all_dates_sorted)
 
         rows = []
-        all_users = sorted(
-            u for u, e in users.items()
-            if e.get("dates_old") or e.get("dates_new")
-        )
+        all_users = sorted(users.keys())
         for user in all_users:
             entry = users[user]
             if entry.get("dates_old"):
@@ -103,13 +96,13 @@ def build_preview_data(users, track_mode="single"):
                 row = [user, entry.get("emoji", ""), "신약"]
                 row.extend("O" if d in entry["dates_new"] else "" for d in all_dates_sorted)
                 rows.append(row)
+            if not entry.get("dates_old") and not entry.get("dates_new"):
+                row = [user, entry.get("emoji", ""), ""]
+                row.extend("" for _ in all_dates_sorted)
+                rows.append(row)
     else:
-        user_dates = {}
         all_dates = set()
-        for user, entry in users.items():
-            if not entry["dates"]:
-                continue
-            user_dates[user] = entry["dates"]
+        for entry in users.values():
             all_dates.update(entry["dates"])
 
         all_dates_sorted = sort_dates(all_dates)
@@ -118,11 +111,10 @@ def build_preview_data(users, track_mode="single"):
         headers.extend(all_dates_sorted)
 
         rows = []
-        for user in sorted(user_dates.keys()):
+        for user in sorted(users.keys()):
             entry = users[user]
-            date_set = user_dates[user]
             row = [user, entry.get("emoji", "")]
-            row.extend("O" if d in date_set else "" for d in all_dates_sorted)
+            row.extend("O" if d in entry["dates"] else "" for d in all_dates_sorted)
             rows.append(row)
 
     return headers, rows
@@ -246,10 +238,7 @@ def apply_sheet_style(ws, headers, rows, leader_col=None, title=None):
 
 def build_dual_preview_data(users):
     """Dual 모드에서 구약/신약 별도의 headers+rows를 반환한다."""
-    all_users = sorted(
-        u for u, e in users.items()
-        if e.get("dates_old") or e.get("dates_new")
-    )
+    all_users = sorted(users.keys())
 
     old_dates = set()
     new_dates = set()
