@@ -18,7 +18,7 @@ logger = get_logger("merger")
 _CONFIG_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "education_config.json")
 
 
-def _load_education_config():
+def load_education_config():
     """education_config.json을 로드한다. 파일 없으면 빈 설정 반환."""
     try:
         with open(_CONFIG_PATH, encoding="utf-8") as f:
@@ -359,7 +359,7 @@ def merge_files(dual_mode="separate"):
     logger.info("통합 대상 파일: %d개", len(latest_files))
 
     # 3. 교육국 설정 로드
-    edu_config = _load_education_config()
+    edu_config = load_education_config()
 
     bible_users = {}
     nt_users = {}
@@ -406,6 +406,22 @@ def merge_files(dual_mode="separate"):
 
         # 사용자 데이터 추출
         users = read_users_from_xlsx(xlsx_bytes, track_mode)
+
+        # 리더 이름 → 본명 변환 (담당자 이름이 약칭으로 저장된 경우 통합)
+        leader_name_map = edu_config.get("leader_name_map", {})
+        if leader in leader_name_map:
+            full_name = leader_name_map[leader]
+            users = {(full_name if u == leader else u): d for u, d in users.items()}
+            logger.info("리더 이름 변환: %s → %s (%s)", leader, full_name, file_name)
+
+        # 전역 제외 멤버 필터링 (모든 room 타입에 적용)
+        global_excluded = edu_config.get("excluded_members", [])
+        if global_excluded:
+            before = len(users)
+            users = {u: d for u, d in users.items()
+                     if not any(kw in u for kw in global_excluded)}
+            if len(users) < before:
+                logger.info("전역 제외 적용: %d명 제거 (%s)", before - len(users), file_name)
 
         if schedule_type == "bible":
             for user, data in users.items():

@@ -28,7 +28,7 @@ from app.file_processor import (
     extract_zip_meta,
 )
 from app.file_processor import MAX_DECOMPRESSED_BYTES
-from app.merger import build_merged_preview, build_merged_xlsx, merge_files
+from app.merger import build_merged_preview, build_merged_xlsx, load_education_config, merge_files
 from app.image_builder import build_output_image
 from app.logger import get_logger
 from app.txt_parser import extract_chat_meta, parse_txt
@@ -450,6 +450,15 @@ class HoneyBibleHandler(BaseHTTPRequestHandler):
             leader = extract_leader(rows)
 
             users = analyze_chat(rows=rows, track_mode=track_mode)
+
+            # 리더 이름 → 본명 변환 (예: 지혜 → 홍지혜)
+            if leader:
+                edu_config = load_education_config()
+                leader_name_map = edu_config.get("leader_name_map", {})
+                if leader in leader_name_map:
+                    full_name = leader_name_map[leader]
+                    users = {(full_name if u == leader else u): v for u, v in users.items()}
+                    logger.info("리더 이름 변환: %s → %s", leader, full_name)
             schedule_type = detect_schedule_type(rows, room_name, track_mode)
             meta = {
                 "room_name": room_name or "",

@@ -16,7 +16,7 @@ from app.merger import (
     _extract_room_from_filename,
     _insert_stats_row,
     _is_saturday,
-    _load_education_config,
+    load_education_config as _load_education_config,
     build_merged_preview,
     build_merged_xlsx,
     merge_files,
