@@ -1038,6 +1038,77 @@ class TestBuildDualPreviewData:
         assert new_h == xlsx_new_h
 
 
+class TestAnalyzeChatConsecutiveMessageWithoutEmoji:
+    """같은 사용자가 연속으로 보낸 메시지에서 이모지 생략 시 허용 테스트."""
+
+    def _make_csv(self, rows):
+        output = io.StringIO(newline="")
+        writer = csv.writer(output)
+        for row in rows:
+            writer.writerow(row)
+        return output.getvalue()
+
+    def test_연속_메시지_이모지_생략__날짜_카운트(self):
+        """강창우 케이스: 이모지 포함 메시지 직후 이모지 없는 메시지도 카운트."""
+        csv_text = self._make_csv([
+            ["날짜", "이름", "메시지"],
+            ["2024-01-01", "user1", "3/6 구약 신약 😀"],
+            ["2024-01-01", "user1", "3/7 구약"],
+        ])
+        result = analyze_chat(csv_text)
+        assert "user1" in result
+        assert "3/6" in result["user1"]["dates"]
+        assert "3/7" in result["user1"]["dates"]
+
+    def test_비연속_메시지_이모지_생략__카운트_안됨(self):
+        """다른 사용자 메시지가 사이에 있으면 이모지 없는 메시지는 무시."""
+        csv_text = self._make_csv([
+            ["날짜", "이름", "메시지"],
+            ["2024-01-01", "user1", "3/6 구약 신약 😀"],
+            ["2024-01-01", "user2", "3/6 구약 🔥"],
+            ["2024-01-01", "user1", "3/7 구약"],
+        ])
+        result = analyze_chat(csv_text)
+        assert "user1" in result
+        assert "3/6" in result["user1"]["dates"]
+        assert "3/7" not in result["user1"]["dates"]
+
+    def test_연속_메시지_이모지_생략__dual_모드(self):
+        csv_text = self._make_csv([
+            ["날짜", "이름", "메시지"],
+            ["2024-01-01", "user1", "3/6 구약 신약 😀"],
+            ["2024-01-01", "user1", "3/7 구약"],
+        ])
+        result = analyze_chat(csv_text, track_mode="dual")
+        assert "user1" in result
+        assert "3/6" in result["user1"]["dates_old"]
+        assert "3/6" in result["user1"]["dates_new"]
+        assert "3/7" in result["user1"]["dates_old"]
+
+    def test_이모지_없고_날짜도_없는_메시지__무시(self):
+        """날짜 없는 메시지는 연속이더라도 무시."""
+        csv_text = self._make_csv([
+            ["날짜", "이름", "메시지"],
+            ["2024-01-01", "user1", "3/6 구약 신약 😀"],
+            ["2024-01-01", "user1", "안녕하세요"],
+        ])
+        result = analyze_chat(csv_text)
+        assert "user1" in result
+        assert result["user1"]["dates"] == {"3/6"}
+
+    def test_연속_이모지_생략_후_다시_이모지_포함(self):
+        """이모지 생략 메시지 후 다시 이모지 포함 메시지가 오는 경우."""
+        csv_text = self._make_csv([
+            ["날짜", "이름", "메시지"],
+            ["2024-01-01", "user1", "3/6 구약 신약 😀"],
+            ["2024-01-01", "user1", "3/7 구약"],
+            ["2024-01-02", "user1", "3/9 구약 신약 😀"],
+        ])
+        result = analyze_chat(csv_text)
+        assert "user1" in result
+        assert result["user1"]["dates"] == {"3/6", "3/7", "3/9"}
+
+
 class TestNormalizeUserName:
     def test_숫자_제거(self):
         assert normalize_user_name("김신영99") == "김신영"

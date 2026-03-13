@@ -226,15 +226,25 @@ def analyze_chat(csv_text=None, track_mode="single", rows=None):
     skip_too_many_dates_2 = 0
     skip_schedule_filter = 0
     skip_no_track = 0
+    prev_matched_user = None
 
     for user, message in rows:
         assigned = user_emojis.get(user)
         if not assigned:
             skip_no_assigned += 1
+            prev_matched_user = None
             continue
-        if not message_contains_emoji(message, assigned["emoji_key"], assigned["emoji"]):
-            skip_emoji_mismatch += 1
-            continue
+        has_emoji = message_contains_emoji(message, assigned["emoji_key"], assigned["emoji"])
+        if not has_emoji:
+            # 같은 사용자가 연속으로 보낸 메시지이고 날짜가 있으면 허용
+            if user == prev_matched_user and parse_dates(message):
+                logger.debug("연속 메시지 이모지 생략 허용: %s → %s", user, message[:40])
+            else:
+                skip_emoji_mismatch += 1
+                prev_matched_user = None
+                continue
+        else:
+            prev_matched_user = user
 
         if track_mode == "dual":
             tracks = extract_tracks(message)
