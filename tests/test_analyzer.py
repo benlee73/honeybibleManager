@@ -1096,6 +1096,29 @@ class TestAnalyzeChatMultilineMessage:
         assert "2/28" in result["강창우"]["dates_old"]
         assert "3/2" in result["강창우"]["dates_old"]
 
+    def test_멀티라인_마지막줄만_이모지__전체_적용(self):
+        """이민재 케이스: 2/27 구약신약 / 2/28 구약 / 3/2 구약 신약 🍇"""
+        rows = [
+            ("user1", "2/26 구약 신약 🍇"),
+            ("user1", "2/27 구약신약\n2/28 구약 \n3/2 구약 신약 🍇"),
+        ]
+        result = analyze_chat(rows=rows, track_mode="dual")
+        assert "user1" in result
+        assert "2/27" in result["user1"]["dates_old"]
+        assert "2/27" in result["user1"]["dates_new"]
+        assert "2/28" in result["user1"]["dates_old"]
+        assert "3/2" in result["user1"]["dates_old"]
+        assert "3/2" in result["user1"]["dates_new"]
+
+    def test_멀티라인_첫줄만_이모지__전체_적용(self):
+        rows = [
+            ("user1", "3/6 😀\n3/7"),
+        ]
+        result = analyze_chat(rows=rows)
+        assert "user1" in result
+        assert "3/6" in result["user1"]["dates"]
+        assert "3/7" in result["user1"]["dates"]
+
 
 class TestAnalyzeChatEmojiChange:
     """사용자가 이모지를 변경한 경우 양쪽 모두 인식하는 테스트."""

@@ -143,13 +143,17 @@ def analyze_chat(csv_text=None, track_mode="single", rows=None):
     rows = [(normalize_user_name(user), message) for user, message in rows]
 
     # 멀티라인 메시지를 줄별로 분리 (각 줄이 독립적인 날짜+트랙 인증인 경우 대응)
+    # 전체 메시지에 이모지가 있으면 이모지 없는 줄에도 붙여준다
     expanded_rows = []
     for user, message in rows:
         lines = message.split("\n")
         if len(lines) > 1:
+            msg_emoji = extract_trailing_emoji(message)
             for line in lines:
                 line = line.strip()
                 if line:
+                    if msg_emoji and not extract_trailing_emoji(line):
+                        line = line + " " + msg_emoji
                     expanded_rows.append((user, line))
         else:
             expanded_rows.append((user, message))
