@@ -209,7 +209,15 @@ def analyze_chat(csv_text=None, track_mode="single", rows=None):
         if not emoji_key:
             continue
         emoji_value = emoji_raw.get(user, {}).get(emoji_key, emoji_key)
-        user_emojis[user] = {"emoji_key": emoji_key, "emoji": emoji_value}
+        # 모든 이모지를 저장하여 이모지 변경 사용자도 인식
+        all_keys = list(counts.keys())
+        all_raw = emoji_raw.get(user, {})
+        user_emojis[user] = {
+            "emoji_key": emoji_key,
+            "emoji": emoji_value,
+            "all_keys": all_keys,
+            "all_raw": all_raw,
+        }
 
     logger.info("이모지 할당된 사용자: %d명", len(user_emojis))
     if not user_emojis:
@@ -250,7 +258,10 @@ def analyze_chat(csv_text=None, track_mode="single", rows=None):
             skip_no_assigned += 1
             prev_matched_user = None
             continue
-        has_emoji = message_contains_emoji(message, assigned["emoji_key"], assigned["emoji"])
+        has_emoji = any(
+            message_contains_emoji(message, k, assigned["all_raw"].get(k))
+            for k in assigned["all_keys"]
+        )
         if not has_emoji:
             # 같은 사용자가 연속으로 보낸 메시지이고 날짜가 있으면 허용
             if user == prev_matched_user and parse_dates(message):

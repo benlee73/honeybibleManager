@@ -1097,6 +1097,44 @@ class TestAnalyzeChatMultilineMessage:
         assert "3/2" in result["강창우"]["dates_old"]
 
 
+class TestAnalyzeChatEmojiChange:
+    """사용자가 이모지를 변경한 경우 양쪽 모두 인식하는 테스트."""
+
+    def test_이모지_변경__양쪽_카운트(self):
+        """이창원 케이스: 🍯 → ⭐️ 변경 후에도 양쪽 다 인식."""
+        rows = [
+            ("user1", "2/2 구약 신약 🍯"),
+            ("user1", "2/3 구약 신약 🍯"),
+            ("user1", "2/4 구약 신약 ⭐️"),
+            ("user1", "2/5 구약 신약 ⭐️"),
+        ]
+        result = analyze_chat(rows=rows, track_mode="dual")
+        assert "user1" in result
+        assert result["user1"]["dates_old"] == {"2/2", "2/3", "2/4", "2/5"}
+        assert result["user1"]["dates_new"] == {"2/2", "2/3", "2/4", "2/5"}
+
+    def test_이모지_변경__대표_이모지는_최다(self):
+        """대표 이모지는 가장 많이 사용한 것."""
+        rows = [
+            ("user1", "2/2 😀"),
+            ("user1", "2/3 😀"),
+            ("user1", "2/4 😀"),
+            ("user1", "2/5 🔥"),
+        ]
+        result = analyze_chat(rows=rows)
+        assert result["user1"]["emoji"] == "😀"
+
+    def test_이모지_변경__single_모드(self):
+        rows = [
+            ("user1", "3/6 😀"),
+            ("user1", "3/7 🔥"),
+        ]
+        result = analyze_chat(rows=rows)
+        assert "user1" in result
+        assert "3/6" in result["user1"]["dates"]
+        assert "3/7" in result["user1"]["dates"]
+
+
 class TestAnalyzeChatConsecutiveMessageWithoutEmoji:
     """같은 사용자가 연속으로 보낸 메시지에서 이모지 생략 시 허용 테스트."""
 
