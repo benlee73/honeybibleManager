@@ -140,11 +140,11 @@ class TestAnalyzeChat:
         assert "user1" not in result
 
     def test_analyze_chat__날짜_수_상한_초과_메시지__스킵(self):
-        # 2/2~2/20 범위는 19개 날짜로 확장되어 상한(14) 초과 → 스킵
+        # 1/1~2/28 범위는 59개 날짜로 확장되어 상한(30) 초과 → 스킵
         csv_text = self._make_csv([
             ["날짜", "이름", "메시지"],
             ["2024-01-01", "user1", "3/15😀"],
-            ["2024-01-02", "user1", "2/2~2/20😀"],
+            ["2024-01-02", "user1", "1/1~2/28😀"],
         ])
         result = analyze_chat(csv_text)
         assert "user1" in result
@@ -152,10 +152,10 @@ class TestAnalyzeChat:
         assert result["user1"]["dates"] == {"3/15"}
 
     def test_analyze_chat__날짜_수_상한_이하_메시지__정상_처리(self):
-        # 2/2~2/10 범위는 9개 날짜로 상한(14) 이하 → 정상 처리
+        # 2/2~2/20 범위는 19개 날짜로 상한(30) 이하 → 정상 처리
         csv_text = self._make_csv([
             ["날짜", "이름", "메시지"],
-            ["2024-01-01", "user1", "2/2~2/10😀"],
+            ["2024-01-01", "user1", "2/2~2/20😀"],
         ])
         result = analyze_chat(csv_text)
         assert "user1" in result
@@ -335,11 +335,11 @@ class TestAnalyzeChatDual:
         assert result["user2"]["dates_new"] == {"2/2", "2/3"}
 
     def test_analyze_chat_dual__날짜_수_상한_초과_메시지__스킵(self):
-        # 2/2~2/20 범위는 19개 날짜로 확장되어 상한(14) 초과 → 스킵
+        # 1/1~2/28 범위는 59개 날짜로 확장되어 상한(30) 초과 → 스킵
         csv_text = self._make_csv([
             ["날짜", "이름", "메시지"],
             ["2024-01-01", "user1", "3/14 구약 😀"],
-            ["2024-01-02", "user1", "2/2~2/20 구약 😀"],
+            ["2024-01-02", "user1", "1/1~2/28 구약 😀"],
         ])
         result = analyze_chat(csv_text, track_mode="dual")
         assert "user1" in result
@@ -811,16 +811,16 @@ class TestAnalyzeChatLeadingTildeCatchup:
         assert "user1" in result
         assert result["user1"]["dates"] == {"2/7"}
 
-    def test_14일_상한_초과__스킵(self):
+    def test_30일_상한_초과__스킵(self):
         csv_text = self._make_csv([
             ["날짜", "이름", "메시지"],
-            ["2024-01-01", "user1", "2/1😀"],
-            ["2024-01-02", "user1", "~2/20😀"],
+            ["2024-01-01", "user1", "1/1😀"],
+            ["2024-01-02", "user1", "~2/28😀"],
         ])
         result = analyze_chat(csv_text)
         assert "user1" in result
-        # ~2/20은 2/2~2/20=19일 → 상한 초과 → 스킵
-        assert result["user1"]["dates"] == {"2/1"}
+        # ~2/28은 1/2~2/28=58일 → 상한(30) 초과 → 스킵
+        assert result["user1"]["dates"] == {"1/1"}
 
     def test_dual_모드__트랙별_last_date_독립_추적(self):
         csv_text = self._make_csv([
@@ -1036,6 +1036,65 @@ class TestBuildDualPreviewData:
         # 신약 헤더 일치
         xlsx_new_h = [ws_new.cell(2, c).value for c in range(2, ws_new.max_column + 1)]
         assert new_h == xlsx_new_h
+
+
+class TestAnalyzeChatMultilineMessage:
+    """멀티라인 메시지를 줄별로 분리하여 처리하는 테스트."""
+
+    def test_멀티라인_선행_틸드__줄별_트랙_분리_dual(self):
+        """서조은 케이스: ~ 2/25 구약 🍚 / ~ 3/2 신약 🍚"""
+        rows = [
+            ("user1", "2/20 구약 신약 🍚"),
+            ("user1", "~ 2/25 구약 🍚\n~ 3/2 신약 🍚"),
+        ]
+        result = analyze_chat(rows=rows, track_mode="dual")
+        assert "user1" in result
+        # 구약: 2/20 + 2/21~2/25
+        assert "2/20" in result["user1"]["dates_old"]
+        assert "2/25" in result["user1"]["dates_old"]
+        # 신약: 2/20 + 2/21~3/2
+        assert "2/20" in result["user1"]["dates_new"]
+        assert "3/2" in result["user1"]["dates_new"]
+
+    def test_멀티라인_날짜별_트랙_분리_dual(self):
+        """2/26 구약 🍚 / 3/3 신약 🍚"""
+        rows = [
+            ("user1", "2/26 구약 🍚\n3/3 신약 🍚"),
+        ]
+        result = analyze_chat(rows=rows, track_mode="dual")
+        assert "user1" in result
+        assert "2/26" in result["user1"]["dates_old"]
+        assert "2/26" not in result["user1"]["dates_new"]
+        assert "3/3" in result["user1"]["dates_new"]
+        assert "3/3" not in result["user1"]["dates_old"]
+
+    def test_멀티라인_single_모드(self):
+        rows = [
+            ("user1", "3/6 😀\n3/7 😀"),
+        ]
+        result = analyze_chat(rows=rows, track_mode="single")
+        assert "user1" in result
+        assert "3/6" in result["user1"]["dates"]
+        assert "3/7" in result["user1"]["dates"]
+
+    def test_단일라인__변경_없음(self):
+        rows = [
+            ("user1", "3/6 구약 신약 😀"),
+        ]
+        result = analyze_chat(rows=rows, track_mode="dual")
+        assert "user1" in result
+        assert "3/6" in result["user1"]["dates_old"]
+        assert "3/6" in result["user1"]["dates_new"]
+
+    def test_멀티라인_빈줄_포함(self):
+        """2/28 구약 신약 (무표정) / / 3/2 구약 신약 (무표정)"""
+        rows = [
+            ("광천 강창우", "2/28 구약 신약  (무표정)\n\n3/2 구약 신약  (무표정)"),
+        ]
+        result = analyze_chat(rows=rows, track_mode="dual")
+        assert "강창우" in result
+        assert "2/28" in result["강창우"]["dates_old"]
+        assert "3/2" in result["강창우"]["dates_old"]
 
 
 class TestAnalyzeChatConsecutiveMessageWithoutEmoji:

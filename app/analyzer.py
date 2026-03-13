@@ -20,7 +20,7 @@ from app.style_constants import COL_PAD, ROW_PAD  # noqa: F401
 
 logger = get_logger("analyzer")
 
-MAX_DATES_PER_MESSAGE = 14
+MAX_DATES_PER_MESSAGE = 30
 
 _STRIP_WORDS = ("맑은샘", "광천", "누나", "오빠", "언니", " 형")
 _STRIP_SUFFIXES = ()
@@ -141,6 +141,22 @@ def analyze_chat(csv_text=None, track_mode="single", rows=None):
 
     # 사용자 이름 정규화
     rows = [(normalize_user_name(user), message) for user, message in rows]
+
+    # 멀티라인 메시지를 줄별로 분리 (각 줄이 독립적인 날짜+트랙 인증인 경우 대응)
+    expanded_rows = []
+    for user, message in rows:
+        lines = message.split("\n")
+        if len(lines) > 1:
+            for line in lines:
+                line = line.strip()
+                if line:
+                    expanded_rows.append((user, line))
+        else:
+            expanded_rows.append((user, message))
+    before_count = len(rows)
+    rows = expanded_rows
+    if len(rows) != before_count:
+        logger.info("멀티라인 분리: %d행 → %d행", before_count, len(rows))
 
     logger.info("파싱된 메시지 수: %d, 트랙 모드: %s", len(rows), track_mode)
     if not rows:
