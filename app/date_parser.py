@@ -103,7 +103,56 @@ def _split_concat_days(text):
     return _CONCAT_DAY_PATTERN.sub(_replacer, text)
 
 
-def parse_dates(message, last_date=None):
+def _find_last_date_before(target, user_dates):
+    """user_dates에서 target보다 앞선 가장 마지막 날짜를 찾는다."""
+    best = None
+    for d in user_dates:
+        try:
+            m, dy = d.split("/")
+            t = (int(m), int(dy))
+        except (ValueError, TypeError):
+            continue
+        if t < target and (best is None or t > best):
+            best = t
+    return best
+
+
+MAX_TILDE_LOOKBACK = 30
+
+
+def _go_back_days(target, days):
+    """target에서 days일 전 날짜를 계산한다."""
+    month, day = target
+    for _ in range(days):
+        day -= 1
+        if day < 1:
+            month -= 1
+            if month < 1:
+                return (1, 1)
+            day = MONTH_DAYS.get(month, 31)
+    return (month, day)
+
+
+def _find_tilde_start(target, user_dates):
+    """~target 확장 시작점: user_dates 내 가장 오래된 날짜(최대 30일 전)를 찾는다.
+
+    빈 날짜를 모두 채우기 위해, target 직전 날짜가 아닌
+    수집된 날짜 중 가장 오래된 것을 기준으로 시작한다.
+    """
+    cutoff = _go_back_days(target, MAX_TILDE_LOOKBACK)
+    best = None
+    for d in user_dates:
+        try:
+            m, dy = d.split("/")
+            t = (int(m), int(dy))
+        except (ValueError, TypeError):
+            continue
+        if cutoff <= t < target and (best is None or t < best):
+            best = t
+    return best
+
+
+def parse_dates(message, last_date=None, user_dates=None):
     if not message:
         return []
     cleaned = _split_concat_days(message)
@@ -112,16 +161,24 @@ def parse_dates(message, last_date=None):
     results = []
     index = 0
 
-    if cleaned[:1] in ("~", "-") and last_date is not None:
+    if cleaned[:1] in ("~", "-") and (last_date is not None or user_dates):
         index = 1
         match = DATE_TOKEN_PATTERN.search(cleaned, index)
         if match and match.start() == index:
             month = int(match.group(1))
             day = int(match.group(2))
             if is_valid_date(month, day):
-                results.extend(
-                    expand_range(last_date[0], last_date[1], month, day)
-                )
+                # user_dates가 있으면 빈 날짜를 모두 채우기 위해
+                # 가장 오래된 수집 날짜(최대 30일 전)에서 시작
+                start = None
+                if user_dates:
+                    start = _find_tilde_start((month, day), user_dates)
+                if start is None:
+                    start = last_date
+                if start is not None:
+                    results.extend(
+                        expand_range(start[0], start[1], month, day)
+                    )
                 current_month = month
                 current_day = day
                 index = match.end()

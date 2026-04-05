@@ -241,3 +241,41 @@ class TestParseDatesConcatDays:
     def test_연결된_날짜_4자리(self):
         result = parse_dates("3/1112🔥")
         assert result == ["3/11", "3/12"]
+
+
+class TestParseDatesTildeWithUserDates:
+    def test_틸드__빈_날짜_모두_채움(self):
+        # 3/4 안읽고 3/5 읽은 상태에서 ~3/7 → 3/4도 포함
+        user_dates = {"3/1", "3/2", "3/3", "3/5"}
+        result = parse_dates("~3/7☘️", last_date=(3, 5), user_dates=user_dates)
+        assert "3/4" in result
+        assert "3/6" in result
+        assert "3/7" in result
+
+    def test_틸드__오타_날짜_있어도_정상_동작(self):
+        # 3/24 오타가 있어도 ~3/2는 2/2부터 채움
+        user_dates = {"2/2", "2/3", "2/26", "3/24"}
+        result = parse_dates("~3/2☘️", last_date=(3, 24), user_dates=user_dates)
+        assert "2/27" in result
+        assert "3/1" in result
+        assert "3/2" in result
+
+    def test_틸드__user_dates_없으면_last_date_사용(self):
+        result = parse_dates("~3/2☘️", last_date=(2, 26))
+        assert result == ["2/27", "2/28", "3/1", "3/2"]
+
+    def test_틸드__user_dates_비어있으면_last_date_폴백(self):
+        result = parse_dates("~3/2☘️", last_date=(2, 26), user_dates=set())
+        assert result == ["2/27", "2/28", "3/1", "3/2"]
+
+    def test_틸드__last_date_없고_user_dates만_있으면_작동(self):
+        user_dates = {"2/24", "2/25", "2/26"}
+        result = parse_dates("~3/2☘️", user_dates=user_dates)
+        assert "2/27" in result
+        assert "3/2" in result
+
+    def test_틸드__최대_30일_범위_제한(self):
+        user_dates = {"1/1"}
+        result = parse_dates("~3/7☘️", user_dates=user_dates)
+        # 1/1은 3/7 기준 30일 이상 전이므로 사용되지 않음
+        assert result == []

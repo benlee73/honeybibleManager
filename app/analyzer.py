@@ -350,10 +350,22 @@ def analyze_chat(csv_text=None, track_mode="single", rows=None):
                     last_date = min(last_old, last_new)
                 else:
                     last_date = last_old or last_new
-            dates = parse_dates(message, last_date=last_date)
+            entry = users.get(user)
+            if entry:
+                if tracks == {"old"}:
+                    user_dates = entry.get("dates_old", set())
+                elif tracks == {"new"}:
+                    user_dates = entry.get("dates_new", set())
+                else:
+                    user_dates = entry.get("dates_old", set()) | entry.get("dates_new", set())
+            else:
+                user_dates = None
+            dates = parse_dates(message, last_date=last_date, user_dates=user_dates)
         else:
             last_date = user_last_date.get(user)
-            dates = parse_dates(message, last_date=last_date)
+            entry = users.get(user)
+            user_dates = entry.get("dates") if entry else None
+            dates = parse_dates(message, last_date=last_date, user_dates=user_dates)
 
         if not dates:
             skip_no_dates_2 += 1
