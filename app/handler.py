@@ -473,13 +473,16 @@ class HoneyBibleHandler(BaseHTTPRequestHandler):
                 "room_name": room_name or "",
                 "track_mode": track_mode,
                 "schedule_type": schedule_type,
-                "leader": canonical_leader or "",
+                "leader": clean_leader_name(canonical_leader) if canonical_leader else "",
             }
             xlsx_bytes = build_output_xlsx(users, track_mode=track_mode, meta=meta)
             image_bytes = build_output_image(users, track_mode=track_mode, theme=theme)
             headers, rows = build_preview_data(users, track_mode=track_mode)
             logger.info("분석 완료: %d명 처리", len(users))
-            drive_filename = build_drive_filename(canonical_leader, saved_date, room_name=room_name)
+            drive_filename = build_drive_filename(
+                clean_leader_name(canonical_leader) if canonical_leader else canonical_leader,
+                saved_date, room_name=room_name,
+            )
 
             response_payload = {
                 "xlsx_base64": base64.b64encode(xlsx_bytes).decode("ascii"),
