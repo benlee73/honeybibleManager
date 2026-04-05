@@ -350,6 +350,15 @@ class TestCleanLeaderName:
     def test_숫자_포함__숫자_유지(self):
         assert _clean_leader_name("홍길동1") == "홍길동1"
 
+    def test_누나_키워드_제거(self):
+        assert _clean_leader_name("원예진 누나") == "예진"
+
+    def test_광천_키워드_제거(self):
+        assert _clean_leader_name("광천 원예진 누나") == "예진"
+
+    def test_오빠_키워드_제거(self):
+        assert _clean_leader_name("김철수 오빠") == "철수"
+
 
 class TestExtractLeader:
     def test_키워드_포함_메시지__후처리된_방장_반환(self):

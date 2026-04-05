@@ -94,9 +94,15 @@ def detect_track_mode(rows):
     return "single"
 
 
+_LEADER_STRIP_WORDS = ("맑은샘", "광천", "누나", "오빠", "언니", " 형")
+
+
 def clean_leader_name(name):
-    """방장 이름에서 영어·공백을 제거하고, 3글자 한글이면 성을 뺀다."""
-    cleaned = re.sub(r"[A-Za-z\s]", "", name)
+    """방장 이름에서 키워드·영어·공백을 제거하고, 3글자 한글이면 성을 뺀다."""
+    cleaned = name
+    for word in _LEADER_STRIP_WORDS:
+        cleaned = cleaned.replace(word, "")
+    cleaned = re.sub(r"[A-Za-z\s]", "", cleaned)
     if not cleaned:
         return name
     if len(cleaned) == 3 and all("\uAC00" <= ch <= "\uD7A3" for ch in cleaned):
