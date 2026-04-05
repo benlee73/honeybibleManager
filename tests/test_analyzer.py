@@ -17,6 +17,7 @@ from app.analyzer import (
     message_contains_emoji,
     normalize_user_name,
     parse_csv_rows,
+    resolve_unknown_users,
     sort_dates,
 )
 
@@ -1271,3 +1272,60 @@ class TestNormalizeUserName:
 
     def test_한글만__그대로(self):
         assert normalize_user_name("김철수") == "김철수"
+
+
+class TestResolveUnknownUsers:
+    def test_기본_매칭__이모티콘으로_실제_사용자_식별(self):
+        rows = [
+            ("(알수없음)", "2/2 구약 신약 🌗"),
+            ("(알수없음)", "2/3 구약 신약🌗"),
+            ("조예진", "4/3 구약 신약🌗"),
+        ]
+        result = resolve_unknown_users(rows)
+        assert result[0] == ("조예진", "2/2 구약 신약 🌗")
+        assert result[1] == ("조예진", "2/3 구약 신약🌗")
+        assert result[2] == ("조예진", "4/3 구약 신약🌗")
+
+    def test_다중_매칭__서로_다른_이모티콘_각각_다른_사용자(self):
+        rows = [
+            ("(알수없음)", "2/2 🌗"),
+            ("(알수없음)", "2/3 🔥"),
+            ("조예진", "4/3 🌗"),
+            ("김철수", "4/3 🔥"),
+        ]
+        result = resolve_unknown_users(rows)
+        assert result[0] == ("조예진", "2/2 🌗")
+        assert result[1] == ("김철수", "2/3 🔥")
+
+    def test_모호한_경우__같은_이모티콘_2명이면_교체하지_않음(self):
+        rows = [
+            ("(알수없음)", "2/2 🌗"),
+            ("조예진", "4/3 🌗"),
+            ("김철수", "4/4 🌗"),
+        ]
+        result = resolve_unknown_users(rows)
+        assert result[0] == ("(알수없음)", "2/2 🌗")
+
+    def test_매칭_실패__이모티콘_없는_메시지는_그대로_유지(self):
+        rows = [
+            ("(알수없음)", "사진을 보냈습니다."),
+            ("조예진", "4/3 🌗"),
+        ]
+        result = resolve_unknown_users(rows)
+        assert result[0] == ("(알수없음)", "사진을 보냈습니다.")
+
+    def test_알수없음_없으면_변경_없음(self):
+        rows = [
+            ("조예진", "4/3 🌗"),
+            ("김철수", "4/3 🔥"),
+        ]
+        result = resolve_unknown_users(rows)
+        assert result == rows
+
+    def test_매칭되지_않는_이모티콘은_그대로_유지(self):
+        rows = [
+            ("(알수없음)", "2/2 🎈"),
+            ("조예진", "4/3 🌗"),
+        ]
+        result = resolve_unknown_users(rows)
+        assert result[0] == ("(알수없음)", "2/2 🎈")

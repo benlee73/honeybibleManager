@@ -22,6 +22,60 @@ logger = get_logger("analyzer")
 
 MAX_DATES_PER_MESSAGE = 30
 
+UNKNOWN_NAME = "(알수없음)"  # normalize_user_name 적용 후의 값
+
+
+def resolve_unknown_users(rows):
+    """(알 수 없음) 메시지를 이모티콘 기반으로 실제 사용자에 매칭하여 교체한다.
+
+    프로필 변경으로 "(알 수 없음)"이 된 메시지의 이모티콘을 분석하여,
+    같은 이모티콘을 사용하는 실제 사용자가 있으면 username을 교체한다.
+    같은 이모티콘을 2명 이상 사용하면 모호하므로 교체하지 않는다.
+    """
+    unknown_exists = any(user == UNKNOWN_NAME for user, _ in rows)
+    if not unknown_exists:
+        return rows
+
+    # 1단계: 실제 사용자별 emoji_key → 사용자 셋 구축
+    emoji_to_users = {}
+    for user, message in rows:
+        if user == UNKNOWN_NAME:
+            continue
+        emoji = extract_trailing_emoji(message)
+        if emoji and parse_dates(message):
+            key = normalize_emoji(emoji)
+            emoji_to_users.setdefault(key, set()).add(user)
+
+    # 1:1 매핑만 유효 (같은 이모티콘을 2명 이상 사용하면 모호)
+    unique_emoji_map = {
+        key: next(iter(users))
+        for key, users in emoji_to_users.items()
+        if len(users) == 1
+    }
+
+    # 2단계: (알수없음) 메시지의 이모티콘으로 실제 사용자 매칭 및 교체
+    resolved = {}
+    new_rows = []
+    for user, message in rows:
+        if user == UNKNOWN_NAME:
+            emoji = extract_trailing_emoji(message)
+            if emoji:
+                key = normalize_emoji(emoji)
+                matched = unique_emoji_map.get(key)
+                if matched:
+                    resolved[key] = matched
+                    new_rows.append((matched, message))
+                    continue
+        new_rows.append((user, message))
+
+    if resolved:
+        for key, matched in resolved.items():
+            logger.info("(알 수 없음) 매칭: 이모티콘 %s → %s", key, matched)
+    else:
+        logger.info("(알 수 없음) 매칭 실패: 일치하는 이모티콘을 가진 사용자 없음")
+
+    return new_rows
+
 _STRIP_WORDS = ("맑은샘", "광천", "누나", "오빠", "언니", " 형")
 _STRIP_SUFFIXES = ()
 
@@ -141,6 +195,9 @@ def analyze_chat(csv_text=None, track_mode="single", rows=None):
 
     # 사용자 이름 정규화
     rows = [(normalize_user_name(user), message) for user, message in rows]
+
+    # (알 수 없음) 사용자 이모티콘 기반 매칭
+    rows = resolve_unknown_users(rows)
 
     # 멀티라인 메시지를 줄별로 분리 (각 줄이 독립적인 날짜+트랙 인증인 경우 대응)
     # 전체 메시지에 이모지가 있으면 이모지 없는 줄에도 붙여준다
