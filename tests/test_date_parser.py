@@ -1,6 +1,6 @@
 import pytest
 
-from app.date_parser import expand_range, is_valid_date, normalize_date, parse_date_or_day, parse_dates
+from app.date_parser import _split_concat_days, expand_range, is_valid_date, normalize_date, parse_date_or_day, parse_dates
 
 
 class TestIsValidDate:
@@ -204,3 +204,40 @@ class TestParseDatesHyphenRange:
     def test_선행_하이픈__last_date_없으면_기존_동작(self):
         result = parse_dates("-2/7")
         assert result == ["2/7"]
+
+
+class TestSplitConcatDays:
+    def test_2자리_분할__45를_4와5로(self):
+        assert _split_concat_days("3/45") == "3/4,5"
+
+    def test_3자리_분할__910을_9와10으로(self):
+        assert _split_concat_days("3/910") == "3/9,10"
+
+    def test_4자리_분할__1112를_11과12로(self):
+        assert _split_concat_days("3/1112") == "3/11,12"
+
+    def test_유효한_날짜는_분할하지_않음(self):
+        assert _split_concat_days("3/12") == "3/12"
+
+    def test_분할_가능하면_분할__99는_9와9(self):
+        assert _split_concat_days("3/99") == "3/9,9"
+
+    def test_분할_불가능하면_그대로(self):
+        assert _split_concat_days("3/00") == "3/00"
+
+    def test_이모지_포함_메시지(self):
+        assert _split_concat_days("3/45📌") == "3/4,5📌"
+
+
+class TestParseDatesConcatDays:
+    def test_연결된_날짜_2자리(self):
+        result = parse_dates("3/45📌")
+        assert result == ["3/4", "3/5"]
+
+    def test_연결된_날짜_3자리(self):
+        result = parse_dates("3/910🌗")
+        assert result == ["3/9", "3/10"]
+
+    def test_연결된_날짜_4자리(self):
+        result = parse_dates("3/1112🔥")
+        assert result == ["3/11", "3/12"]

@@ -4,6 +4,7 @@ DATE_TIME_PATTERN = re.compile(r"^\d{4}-\d{2}-\d{2}")
 DATE_PATTERN = re.compile(r"(?<!\d)(\d{1,2})\s*/\s*(\d{1,2})(?!\d)")
 DATE_TOKEN_PATTERN = re.compile(r"(\d{1,2})/(\d{1,2})")
 DAY_ONLY_PATTERN = re.compile(r"(\d{1,2})")
+_CONCAT_DAY_PATTERN = re.compile(r"(?<!\d)(\d{1,2})/(\d{2,4})(?!\d)")
 
 MONTH_DAYS = {
     1: 31,
@@ -79,10 +80,34 @@ def expand_range(start_month, start_day, end_month, end_day):
     return results
 
 
+def _split_concat_days(text):
+    """'3/45' → '3/4,5', '3/910' → '3/9,10' 등 연결된 날짜를 분리한다.
+
+    day 부분이 2~4자리이고 유효한 날짜가 아닐 때, 두 날짜로 분할을 시도한다.
+    """
+    def _replacer(match):
+        month_str = match.group(1)
+        day_str = match.group(2)
+        month = int(month_str)
+        day = int(day_str)
+        if is_valid_date(month, day):
+            return match.group(0)
+        for i in range(1, len(day_str)):
+            d1 = int(day_str[:i])
+            d2_str = day_str[i:]
+            d2 = int(d2_str)
+            if d2 > 0 and is_valid_date(month, d1) and is_valid_date(month, d2):
+                return f"{month_str}/{day_str[:i]},{d2_str}"
+        return match.group(0)
+
+    return _CONCAT_DAY_PATTERN.sub(_replacer, text)
+
+
 def parse_dates(message, last_date=None):
     if not message:
         return []
-    cleaned = re.sub(r"(\d)\s+(\d)", r"\1,\2", message)
+    cleaned = _split_concat_days(message)
+    cleaned = re.sub(r"(\d)\s+(\d)", r"\1,\2", cleaned)
     cleaned = re.sub(r"\s+", "", cleaned)
     results = []
     index = 0
