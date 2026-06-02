@@ -78,6 +78,29 @@ if (cheerButton) {
   });
 }
 
+const guidePhoto = document.querySelector(".guide-photo");
+const reducedMotionQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
+
+if (guidePhoto && !reducedMotionQuery.matches) {
+  let guidePhotoTimer = null;
+  const playGuidePhotoCheer = () => {
+    window.clearTimeout(guidePhotoTimer);
+    guidePhoto.classList.remove("is-cheering");
+    void guidePhoto.offsetWidth;
+    guidePhoto.classList.add("is-cheering");
+    guidePhotoTimer = window.setTimeout(() => {
+      guidePhoto.classList.remove("is-cheering");
+    }, 760);
+  };
+
+  guidePhoto.addEventListener("pointerenter", (event) => {
+    if (event.pointerType === "mouse") {
+      playGuidePhotoCheer();
+    }
+  });
+  guidePhoto.addEventListener("pointerdown", playGuidePhotoCheer);
+}
+
 const form = document.getElementById("analyzeForm");
 const fileInput = document.getElementById("csvFile");
 const analyzeButton = document.getElementById("analyzeButton");
