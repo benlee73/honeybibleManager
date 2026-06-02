@@ -766,6 +766,10 @@ class TestBuildOutputXlsx:
         ws_analysis = wb["분석결과"]
         assert ws_analysis.cell(2, 2).value == "분석결과"
         assert ws_analysis.cell(6, 3).value.startswith("=COUNTA(")
+        assert ws_analysis.cell(23, 2).value == "하차 주"
+        assert ws_analysis.cell(23, 6).value is None
+        assert ws_analysis.cell(24, 3).value.startswith("=IF(E24=0")
+        assert ws_analysis.cell(24, 5).value.startswith("=COUNTIFS(")
         assert len(ws_analysis._charts) >= 3
 
         ws_helper = wb["_분석계산"]

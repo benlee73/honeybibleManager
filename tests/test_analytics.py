@@ -11,6 +11,7 @@ from app.analytics import (
     build_output_analysis_records,
     dedupe_record_count,
     dropout_distribution,
+    dropout_week_distribution,
     dual_record_count,
     progress_distribution,
     summarize_records,
@@ -157,6 +158,24 @@ def test_하차_분포__같은_주는_하나로_묶음():
     assert dropout[0]["names"] == "user1, user2"
 
 
+def test_하차_주_분포__같은_주_여러_위치를_하나로_묶음():
+    bible_users = {
+        "bible": {"dates": {"2/2"}, "emoji": "😀"},
+    }
+    nt_users = {
+        "nt": {"dates": {"2/2"}, "emoji": "🔥"},
+    }
+    records = build_merged_analysis_records(bible_users, nt_users, {}, part=1)
+
+    dropout = dropout_week_distribution(records)
+    assert len(dropout) == 1
+    assert dropout[0]["week"] == "2/2~2/8"
+    assert dropout[0]["date"] == "2/2"
+    assert dropout[0]["count"] == 2
+    assert "창세기 부근" in dropout[0]["position"]
+    assert "마태복음 부근" in dropout[0]["position"]
+
+
 def test_날짜별_인증_추이__사용자별_일자_집계():
     users = {
         "user1": {"dates": {"2/2", "2/3"}, "emoji": "😀"},
@@ -187,7 +206,6 @@ def test_add_analysis_sheet__표와_차트_생성():
     assert "|" not in ws.cell(24, 2).value
     assert ws.cell(24, 4).alignment.wrap_text is True
     assert ws.cell(24, 4).alignment.horizontal == "left"
-    assert ws.cell(24, 6).alignment.wrap_text is True
-    assert ws.cell(24, 6).alignment.horizontal == "left"
+    assert ws.cell(23, 6).value is None
     assert ws.column_dimensions["F"].width >= 40
     assert len(ws._charts) >= 3
