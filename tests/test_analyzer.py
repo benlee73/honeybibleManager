@@ -775,6 +775,8 @@ class TestBuildOutputXlsx:
         assert ws_analysis.cell(25, 13).value == "2/9~2/15"
         assert ws_analysis.cell(24, 14).value.startswith("=IF(P24=\"\",\"\",TEXTJOIN(")
         assert ws_analysis.cell(24, 16).value.startswith("=IF(COUNTIFS(")
+        assert "$U$2:$U$3" in ws_analysis.cell(24, 16).value
+        assert "$T$2:$T$3" not in ws_analysis.cell(24, 16).value
         assert ws_analysis.column_dimensions["M"].hidden is True
         assert ws_analysis.column_dimensions["P"].hidden is True
         assert len(ws_analysis._charts) >= 3
@@ -786,6 +788,9 @@ class TestBuildOutputXlsx:
         assert "MAX(FILTER(COLUMN('꿀성경 진도표'!" in ws_helper.cell(2, 14).value
         assert ws_helper.cell(2, 10).value == "=N2"
         assert ws_helper.cell(2, 13).value == '=IF(H2,"완독",IF(F2=0,"미시작","하차 추정"))'
+        assert ws_helper.cell(2, 20).value.startswith("=IF(U2=0")
+        assert "K2" not in ws_helper.cell(2, 20).value
+        assert ws_helper.cell(2, 21).value == "=MAX(O2,R2)"
 
     def test_build_output_xlsx__dual_완독자_시트와_트랙별_강조(self):
         from openpyxl import load_workbook

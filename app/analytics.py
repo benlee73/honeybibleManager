@@ -640,6 +640,14 @@ def _date_order(value):
     return month * 100 + day
 
 
+def _week_order_bounds(week_label):
+    try:
+        start, end = str(week_label).split("~", 1)
+    except ValueError:
+        return 0, 0
+    return _date_order(start), _date_order(end)
+
+
 def _write_date_map(ws, records, part):
     headers = ["매핑ID", "키", "트랙", "날짜", "주", "진행 위치", "정렬값"]
     start_col = 27  # AA
@@ -672,7 +680,7 @@ def _add_formula_helper_sheet(wb, records, source_groups, part):
         "ID", "그룹", "담당", "이름", "이모티콘", "인증일수", "전체일수", "완독",
         "진행률", "마지막 인증일", "마지막 트랙", "마지막 위치", "상태",
         "소스1 마지막일", "소스1 정렬값", "소스1 위치",
-        "소스2 마지막일", "소스2 정렬값", "소스2 위치", "마지막 주",
+        "소스2 마지막일", "소스2 정렬값", "소스2 위치", "마지막 주", "마지막 정렬값",
     ]
     for col, header in enumerate(headers, start=1):
         ws.cell(1, col, header)
@@ -719,14 +727,13 @@ def _add_formula_helper_sheet(wb, records, source_groups, part):
             ws.cell(index, 12, f'=IF(J{index}="","미시작",P{index})')
 
         ws.cell(index, 13, f'=IF(H{index},"완독",IF(F{index}=0,"미시작","하차 추정"))')
+        ws.cell(index, 21, f"=MAX(O{index},R{index})")
         ws.cell(index, 20, (
-            f'=IF(J{index}="","",IFERROR(INDEX($AE$2:$AE${map_end_row},'
-            f'MATCH(IF(K{index}="신약","new",IF(K{index}="신약일독","nt",'
-            f'IF(K{index}="성경일독","bible","old")))&"|"&J{index},'
-            f'$AB$2:$AB${map_end_row},0)),"미확인"))'
+            f'=IF(U{index}=0,"",IFERROR(INDEX($AE$2:$AE${map_end_row},'
+            f'MATCH(U{index},$AG$2:$AG${map_end_row},0)),"미확인"))'
         ))
 
-    for col in range(1, 21):
+    for col in range(1, 22):
         ws.column_dimensions[get_column_letter(col)].width = 14
     for col in range(27, 34):
         ws.column_dimensions[get_column_letter(col)].width = 16
@@ -811,7 +818,7 @@ def _formula_dropout_rows(records, helper_info, start_row, start_col):
     first = helper_info["first_row"]
     last = helper_info["last_row"]
     status_range = _helper_range(helper, "M", first, last)
-    week_range = _helper_range(helper, "T", first, last)
+    last_order_range = _helper_range(helper, "U", first, last)
     last_date_range = _helper_range(helper, "J", first, last)
     position_range = _helper_range(helper, "L", first, last)
 
@@ -819,17 +826,23 @@ def _formula_dropout_rows(records, helper_info, start_row, start_col):
     raw_rows = []
     for offset, week_label in enumerate(candidate_weeks, start=1):
         excel_row = start_row + offset
-        criteria_cell = _cell_addr(excel_row, criteria_col)
         raw_count_cell = _cell_addr(excel_row, criteria_col + 3)
-        raw_count = f'COUNTIFS({status_range},"하차 추정",{week_range},{criteria_cell})'
+        week_start, week_end = _week_order_bounds(week_label)
+        raw_count = (
+            f'COUNTIFS({status_range},"하차 추정",'
+            f'{last_order_range},">={week_start}",'
+            f'{last_order_range},"<={week_end}")'
+        )
         count_formula = f'=IF({raw_count}=0,"",{raw_count})'
         date_formula = (
             f'=IF({raw_count_cell}="","",TEXTJOIN(", ",TRUE,UNIQUE(FILTER('
-            f'{last_date_range},({status_range}="하차 추정")*({week_range}={criteria_cell})))))'
+            f'{last_date_range},({status_range}="하차 추정")*'
+            f'({last_order_range}>={week_start})*({last_order_range}<={week_end})))))'
         )
         position_formula = (
             f'=IF({raw_count_cell}="","",TEXTJOIN(" / ",TRUE,UNIQUE(FILTER('
-            f'{position_range},({status_range}="하차 추정")*({week_range}={criteria_cell})))))'
+            f'{position_range},({status_range}="하차 추정")*'
+            f'({last_order_range}>={week_start})*({last_order_range}<={week_end})))))'
         )
         raw_rows.append([week_label, date_formula, position_formula, count_formula])
 
