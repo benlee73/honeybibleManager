@@ -394,6 +394,25 @@ class TestBuildMergedXlsx:
         assert names.count("김치훈") == 2
         assert names.count("동명이인") == 2
 
+    def test_분석결과__마지막_인증일은_오른쪽_끝_O를_참조(self):
+        bible_users = {
+            "김가람": {"dates": {"2/2", "5/13"}, "emoji": "🍫", "leader": "예슬"},
+        }
+
+        xlsx_bytes = build_merged_xlsx(bible_users, {})
+        wb = load_workbook(io.BytesIO(xlsx_bytes))
+        ws_helper = wb["_분석계산"]
+        row = next(
+            row
+            for row in range(2, ws_helper.max_row + 1)
+            if ws_helper.cell(row, 4).value == "김가람"
+        )
+
+        formula = ws_helper.cell(row, 14).value
+        assert "LOOKUP(" not in formula
+        assert "MAX(FILTER(COLUMN('성경일독 진도표'!" in formula
+        assert ws_helper.cell(row, 10).value == f"=N{row}"
+
 
 class TestBuildMergedPreview:
     def test_양쪽_사용자_포함(self):

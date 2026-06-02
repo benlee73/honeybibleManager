@@ -768,16 +768,21 @@ class TestBuildOutputXlsx:
         assert ws_analysis.cell(6, 3).value.startswith("=COUNTA(")
         assert ws_analysis.cell(23, 2).value == "하차 주"
         assert ws_analysis.cell(23, 6).value is None
-        assert ws_analysis.cell(24, 2).value == '=IF(E24="","",M24)'
-        assert ws_analysis.cell(24, 3).value.startswith('=IF(E24="",""')
-        assert ws_analysis.cell(24, 5).value.startswith("=IF(COUNTIFS(")
+        assert ws_analysis.cell(24, 2).value.startswith("=IFERROR(TAKE(FILTER(")
+        assert ws_analysis.cell(24, 3).value is None
+        assert ws_analysis.cell(24, 5).value is None
         assert ws_analysis.cell(24, 13).value == "2/2~2/8"
+        assert ws_analysis.cell(24, 14).value.startswith("=IF(P24=\"\",\"\",TEXTJOIN(")
+        assert ws_analysis.cell(24, 16).value.startswith("=IF(COUNTIFS(")
         assert ws_analysis.column_dimensions["M"].hidden is True
+        assert ws_analysis.column_dimensions["P"].hidden is True
         assert len(ws_analysis._charts) >= 3
 
         ws_helper = wb["_분석계산"]
         assert ws_helper.sheet_state == "hidden"
         assert ws_helper.cell(2, 6).value.startswith("=COUNTIF('꿀성경 진도표'!")
+        assert "LOOKUP(" not in ws_helper.cell(2, 14).value
+        assert "MAX(FILTER(COLUMN('꿀성경 진도표'!" in ws_helper.cell(2, 14).value
         assert ws_helper.cell(2, 10).value == "=N2"
         assert ws_helper.cell(2, 13).value == '=IF(H2,"완독",IF(F2=0,"미시작","하차 추정"))'
 
