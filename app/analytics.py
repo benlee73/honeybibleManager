@@ -2,6 +2,7 @@
 
 import datetime
 from dataclasses import dataclass
+from math import ceil
 from statistics import median
 
 from openpyxl.chart import BarChart, LineChart, Reference
@@ -388,12 +389,37 @@ def detail_rows(records):
     return rows
 
 
-def _style_table(ws, start_row, start_col, headers, rows, percent_cols=None):
+def _visual_width(value):
+    """한글이 많은 셀의 대략적인 표시 폭을 계산한다."""
+    text = "" if value is None else str(value)
+    return sum(2 if ord(char) > 127 else 1 for char in text)
+
+
+def _estimated_line_count(value, width):
+    text = "" if value is None else str(value)
+    if not text:
+        return 1
+    capacity = max(8, int((width or 12) * 1.5))
+    return sum(max(1, ceil(_visual_width(part) / capacity)) for part in text.splitlines())
+
+
+def _style_table(
+    ws,
+    start_row,
+    start_col,
+    headers,
+    rows,
+    percent_cols=None,
+    wrap_cols=None,
+    left_cols=None,
+):
     header_fill = PatternFill(start_color="D6E4F0", end_color="D6E4F0", fill_type="solid")
     thin = Side(style="thin")
     border = Border(top=thin, bottom=thin, left=thin, right=thin)
-    center = Alignment(horizontal="center", vertical="center")
+    center = Alignment(horizontal="center", vertical="center", wrap_text=True)
     percent_cols = set(percent_cols or [])
+    wrap_cols = set(wrap_cols or [])
+    left_cols = set(left_cols or [])
 
     for col_offset, header in enumerate(headers):
         cell = ws.cell(start_row, start_col + col_offset, header)
@@ -403,13 +429,24 @@ def _style_table(ws, start_row, start_col, headers, rows, percent_cols=None):
         cell.border = border
 
     for row_offset, row in enumerate(rows, start=1):
+        row_idx = start_row + row_offset
+        max_lines = 1
         for col_offset, value in enumerate(row):
-            cell = ws.cell(start_row + row_offset, start_col + col_offset, value)
+            cell = ws.cell(row_idx, start_col + col_offset, value)
             cell.font = Font(name="맑은 고딕", size=11)
-            cell.alignment = center
+            cell.alignment = Alignment(
+                horizontal="left" if col_offset in left_cols else "center",
+                vertical="center",
+                wrap_text=col_offset in wrap_cols,
+            )
             cell.border = border
             if col_offset in percent_cols:
                 cell.number_format = "0.0%"
+            if col_offset in wrap_cols:
+                col_width = ws.column_dimensions[cell.column_letter].width
+                max_lines = max(max_lines, _estimated_line_count(value, col_width))
+        if max_lines > 1:
+            ws.row_dimensions[row_idx].height = min(84, max(28, 18 * max_lines))
 
 
 def _section_title(ws, row, col, title):
@@ -422,17 +459,17 @@ def _section_title(ws, row, col, title):
 def _set_widths(ws):
     widths = {
         "A": 2,
-        "B": 14,
-        "C": 12,
-        "D": 16,
-        "E": 10,
-        "F": 12,
+        "B": 16,
+        "C": 16,
+        "D": 24,
+        "E": 13,
+        "F": 42,
         "G": 12,
         "H": 12,
         "I": 14,
-        "J": 20,
-        "K": 14,
-        "L": 26,
+        "J": 18,
+        "K": 32,
+        "L": 14,
     }
     for col, width in widths.items():
         ws.column_dimensions[col].width = width
@@ -499,21 +536,29 @@ def add_analysis_sheet(wb, records):
     row += len(dist_rows) + 4
     _section_title(ws, row, col, "하차 추정 분포")
     dropout_rows_data = dropout_distribution(records)
-    dropout_headers = ["하차 주/위치", "마지막 인증일", "진행 위치", "하차 추정 인원", "이름"]
+    dropout_headers = ["하차 주", "마지막 인증일", "진행 위치", "하차 추정 인원", "이름"]
     dropout_rows = [
-        [item["label"], item["date"], item["position"], item["count"], item["names"]]
+        [item["week"], item["date"], item["position"], item["count"], item["names"]]
         for item in dropout_rows_data
     ]
     if not dropout_rows:
         dropout_rows = [["-", "-", "하차 추정 없음", 0, ""]]
     dropout_table_row = row + 1
-    _style_table(ws, dropout_table_row, col, dropout_headers, dropout_rows)
+    _style_table(
+        ws,
+        dropout_table_row,
+        col,
+        dropout_headers,
+        dropout_rows,
+        wrap_cols={1, 2, 4},
+        left_cols={2, 4},
+    )
 
     if any(row_data[3] for row_data in dropout_rows):
         chart = BarChart()
         chart.title = "하차 추정 분포"
         chart.y_axis.title = "인원"
-        chart.x_axis.title = "마지막 인증 위치"
+        chart.x_axis.title = "하차 주"
         data = Reference(ws, min_col=col + 3, min_row=dropout_table_row,
                          max_row=dropout_table_row + len(dropout_rows))
         categories = Reference(ws, min_col=col, min_row=dropout_table_row + 1,
@@ -553,7 +598,16 @@ def add_analysis_sheet(wb, records):
         "그룹", "담당", "이름", "이모티콘", "진행률", "인증일수", "전체일수",
         "마지막 인증일", "마지막 트랙", "마지막 위치", "상태",
     ]
-    _style_table(ws, row + 1, col, detail_headers, detail_rows(records), percent_cols={4})
+    _style_table(
+        ws,
+        row + 1,
+        col,
+        detail_headers,
+        detail_rows(records),
+        percent_cols={4},
+        wrap_cols={1, 2, 9},
+        left_cols={1, 2, 9},
+    )
 
     ws.freeze_panes = "B3"
     return ws

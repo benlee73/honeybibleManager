@@ -182,4 +182,12 @@ def test_add_analysis_sheet__표와_차트_생성():
     assert ws.cell(2, 2).value == "분석결과"
     assert ws.cell(5, 2).value == "그룹"
     assert ws.cell(6, 2).value == "전체"
+    assert ws.cell(23, 2).value == "하차 주"
+    assert ws.cell(24, 2).value == "2/2~2/8"
+    assert "|" not in ws.cell(24, 2).value
+    assert ws.cell(24, 4).alignment.wrap_text is True
+    assert ws.cell(24, 4).alignment.horizontal == "left"
+    assert ws.cell(24, 6).alignment.wrap_text is True
+    assert ws.cell(24, 6).alignment.horizontal == "left"
+    assert ws.column_dimensions["F"].width >= 40
     assert len(ws._charts) >= 3
