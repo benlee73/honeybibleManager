@@ -7,6 +7,7 @@ import pytest
 from openpyxl import Workbook, load_workbook
 
 from app.analyzer import build_output_xlsx
+from app.schedule import BIBLE_PART_DATES, NT_PART_DATES
 from app.style_constants import COL_PAD, ROW_PAD, apply_sheet_style
 from app.merger import (
     _classify_education_users,
@@ -244,6 +245,7 @@ class TestBuildMergedXlsx:
 
         assert "성경일독 진도표" in wb.sheetnames
         assert "신약일독 진도표" in wb.sheetnames
+        assert "완독자" in wb.sheetnames
 
     def test_담당_컬럼_포함(self):
         bible_users = {
@@ -303,6 +305,33 @@ class TestBuildMergedXlsx:
         bottom_cell = ws.cell(6, leader_col)
         assert bottom_cell.border.bottom.style == "medium"
 
+    def test_완독자_시트와_이름셀_강조(self):
+        bible_users = {
+            "complete": {"dates": set(BIBLE_PART_DATES[0]), "emoji": "😀", "leader": "방장A"},
+            "partial": {"dates": {"2/2"}, "emoji": "🔥", "leader": "방장A"},
+        }
+        nt_users = {
+            "nt_complete": {"dates": set(NT_PART_DATES[0]), "emoji": "✨", "leader": "방장B"},
+        }
+
+        xlsx_bytes = build_merged_xlsx(bible_users, nt_users)
+        wb = load_workbook(io.BytesIO(xlsx_bytes))
+
+        ws_bible = wb["성경일독 진도표"]
+        assert ws_bible.cell(5, 3).value == "complete"
+        assert ws_bible.cell(5, 3).fill.start_color.rgb == "00D9EAD3"
+        assert ws_bible.cell(6, 3).value == "partial"
+        assert ws_bible.cell(6, 3).fill.start_color.rgb == "00EBF1F8"
+
+        ws_complete = wb["완독자"]
+        completion_pairs = {
+            (ws_complete.cell(row, 3).value, ws_complete.cell(row, 4).value)
+            for row in range(3, ws_complete.max_row + 1)
+        }
+        assert ("성경일독", "complete") in completion_pairs
+        assert ("신약일독", "nt_complete") in completion_pairs
+        assert ("성경일독", "partial") not in completion_pairs
+
 
 class TestBuildMergedPreview:
     def test_양쪽_사용자_포함(self):
@@ -328,7 +357,7 @@ class TestBuildMergedPreview:
 
 
 class TestBuildMergedXlsxDualUsers:
-    def test_dual_users_전달시_3개_시트_생성(self):
+    def test_dual_users_전달시_4개_시트_생성(self):
         bible_users = {
             "user1": {"dates": {"2/2"}, "emoji": "😀", "leader": "방장A"},
         }
@@ -344,8 +373,9 @@ class TestBuildMergedXlsxDualUsers:
         assert "성경일독 진도표" in wb.sheetnames
         assert "신약일독 진도표" in wb.sheetnames
         assert "투트랙 진도표" in wb.sheetnames
+        assert "완독자" in wb.sheetnames
 
-    def test_dual_users_None__2개_시트_유지(self):
+    def test_dual_users_None__완독자_포함_3개_시트_유지(self):
         bible_users = {
             "user1": {"dates": {"2/2"}, "emoji": "😀", "leader": "방장A"},
         }
@@ -355,13 +385,14 @@ class TestBuildMergedXlsxDualUsers:
 
         assert "성경일독 진도표" in wb.sheetnames
         assert "신약일독 진도표" in wb.sheetnames
+        assert "완독자" in wb.sheetnames
         assert "투트랙 진도표" not in wb.sheetnames
 
-    def test_dual_users_빈_dict__2개_시트_유지(self):
+    def test_dual_users_빈_dict__완독자_포함_3개_시트_유지(self):
         xlsx_bytes = build_merged_xlsx({}, {}, dual_users={})
         wb = load_workbook(io.BytesIO(xlsx_bytes))
 
-        assert len(wb.sheetnames) == 2
+        assert len(wb.sheetnames) == 3
         assert "투트랙 진도표" not in wb.sheetnames
 
     def test_투트랙_시트_구약_신약_행_분리(self):
@@ -399,6 +430,45 @@ class TestBuildMergedXlsxDualUsers:
         assert ws.cell(5, 5).value == "구약"
         # 신약 행 없음
         assert ws.cell(6, 3).value is None
+
+    def test_투트랙_완독자_시트와_트랙별_강조(self):
+        dual_users = {
+            "both": {
+                "dates_old": set(BIBLE_PART_DATES[0]),
+                "dates_new": set(NT_PART_DATES[0]),
+                "emoji": "😀",
+                "leader": "방장A",
+            },
+            "old_only": {
+                "dates_old": set(BIBLE_PART_DATES[0]),
+                "dates_new": {"2/2"},
+                "emoji": "🔥",
+                "leader": "방장A",
+            },
+        }
+        xlsx_bytes = build_merged_xlsx({}, {}, dual_users=dual_users)
+        wb = load_workbook(io.BytesIO(xlsx_bytes))
+
+        ws_dual = wb["투트랙 진도표"]
+        assert ws_dual.cell(5, 3).value == "both"
+        assert ws_dual.cell(5, 3).fill.start_color.rgb == "00D9EAD3"
+        assert ws_dual.cell(6, 3).value == "both"
+        assert ws_dual.cell(6, 3).fill.start_color.rgb == "00D9EAD3"
+        assert ws_dual.cell(7, 3).value == "old_only"
+        assert ws_dual.cell(7, 3).fill.start_color.rgb == "00D9EAD3"
+        assert ws_dual.cell(8, 3).value == "old_only"
+        assert ws_dual.cell(8, 3).fill.start_color.rgb == "00EBF1F8"
+
+        ws_complete = wb["완독자"]
+        completion_pairs = {
+            (ws_complete.cell(row, 3).value, ws_complete.cell(row, 4).value)
+            for row in range(3, ws_complete.max_row + 1)
+        }
+        assert ("투트랙(구약)", "both") in completion_pairs
+        assert ("투트랙(신약)", "both") in completion_pairs
+        assert ("투트랙(둘 다)", "both") in completion_pairs
+        assert ("투트랙(구약)", "old_only") in completion_pairs
+        assert ("투트랙(신약)", "old_only") not in completion_pairs
 
 
 class TestBuildMergedPreviewDualUsers:

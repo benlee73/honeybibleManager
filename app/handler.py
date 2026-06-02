@@ -31,6 +31,7 @@ from app.file_processor import MAX_DECOMPRESSED_BYTES
 from app.merger import build_merged_preview, build_merged_xlsx, load_education_config, merge_files, resolve_alias, resolve_leader_override
 from app.image_builder import build_output_image
 from app.logger import get_logger
+from app.schedule import detect_part
 from app.txt_parser import extract_chat_meta, parse_txt
 
 logger = get_logger("handler")
@@ -300,7 +301,12 @@ class HoneyBibleHandler(BaseHTTPRequestHandler):
             nt_users = result["nt_users"]
             dual_users = result.get("dual_users", {})
 
-            xlsx_bytes = build_merged_xlsx(bible_users, nt_users, dual_users=dual_users)
+            xlsx_bytes = build_merged_xlsx(
+                bible_users,
+                nt_users,
+                dual_users=dual_users,
+                part=result.get("part", 1),
+            )
             preview_headers, preview_rows = build_merged_preview(
                 bible_users, nt_users, dual_users=dual_users,
             )
@@ -473,6 +479,7 @@ class HoneyBibleHandler(BaseHTTPRequestHandler):
                 "room_name": room_name or "",
                 "track_mode": track_mode,
                 "schedule_type": schedule_type,
+                "part": detect_part(rows) or 1,
                 "leader": clean_leader_name(canonical_leader) if canonical_leader else "",
             }
             xlsx_bytes = build_output_xlsx(users, track_mode=track_mode, meta=meta)

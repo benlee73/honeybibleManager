@@ -20,7 +20,7 @@ from app.analyzer import (
     resolve_unknown_users,
     sort_dates,
 )
-from app.schedule import BIBLE_PART_DATES
+from app.schedule import BIBLE_PART_DATES, NT_PART_DATES
 
 
 class TestDecodeCsvPayload:
@@ -612,14 +612,14 @@ class TestBuildOutputXlsx:
         ws = wb.active
         assert ws.freeze_panes == "B3"
 
-    def test_build_output_xlsx__dual_모드__시트_2개_생성(self):
+    def test_build_output_xlsx__dual_모드__시트_3개_생성(self):
         from openpyxl import load_workbook
         users = {
             "user1": {"dates_old": {"2/2"}, "dates_new": {"2/3"}, "emoji": "😀"},
         }
         result = build_output_xlsx(users, track_mode="dual")
         wb = load_workbook(io.BytesIO(result))
-        assert len(wb.sheetnames) == 2
+        assert len(wb.sheetnames) == 3
 
     def test_build_output_xlsx__dual_모드__시트_이름(self):
         from openpyxl import load_workbook
@@ -628,7 +628,7 @@ class TestBuildOutputXlsx:
         }
         result = build_output_xlsx(users, track_mode="dual")
         wb = load_workbook(io.BytesIO(result))
-        assert wb.sheetnames == ["구약 진도표", "신약 진도표"]
+        assert wb.sheetnames == ["구약 진도표", "신약 진도표", "완독자"]
 
     def test_build_output_xlsx__dual_모드__트랙_컬럼_없음(self):
         from openpyxl import load_workbook
@@ -733,6 +733,66 @@ class TestBuildOutputXlsx:
         ws = wb.active
         assert ws.cell(2, 2).value == "이름"
         assert ws.cell(3, 2).value is None
+
+    def test_build_output_xlsx__완독자_시트와_이름셀_강조(self):
+        from openpyxl import load_workbook
+        users = {
+            "complete": {"dates": set(BIBLE_PART_DATES[0]), "emoji": "😀"},
+            "partial": {"dates": {"2/2"}, "emoji": "🔥"},
+        }
+        meta = {"schedule_type": "bible", "part": 1}
+
+        result = build_output_xlsx(users, meta=meta)
+        wb = load_workbook(io.BytesIO(result))
+
+        ws = wb["꿀성경 진도표"]
+        assert ws.cell(3, 2).value == "complete"
+        assert ws.cell(3, 2).fill.start_color.rgb == "00D9EAD3"
+        assert ws.cell(4, 2).value == "partial"
+        assert ws.cell(4, 2).fill.start_color.rgb == "00EBF1F8"
+
+        ws_complete = wb["완독자"]
+        assert ws_complete.cell(2, 2).value == "트랙"
+        assert ws_complete.cell(3, 2).value == "성경일독"
+        assert ws_complete.cell(3, 3).value == "complete"
+        assert ws_complete.cell(3, 5).value == len(BIBLE_PART_DATES[0])
+
+    def test_build_output_xlsx__dual_완독자_시트와_트랙별_강조(self):
+        from openpyxl import load_workbook
+        users = {
+            "both": {
+                "dates_old": set(BIBLE_PART_DATES[0]),
+                "dates_new": set(NT_PART_DATES[0]),
+                "emoji": "😀",
+            },
+            "old_only": {
+                "dates_old": set(BIBLE_PART_DATES[0]),
+                "dates_new": {"2/2"},
+                "emoji": "🔥",
+            },
+        }
+        meta = {"schedule_type": "dual", "track_mode": "dual", "part": 1}
+
+        result = build_output_xlsx(users, track_mode="dual", meta=meta)
+        wb = load_workbook(io.BytesIO(result))
+
+        ws_old = wb["구약 진도표"]
+        ws_new = wb["신약 진도표"]
+        assert ws_old.cell(3, 2).fill.start_color.rgb == "00D9EAD3"
+        assert ws_old.cell(4, 2).fill.start_color.rgb == "00D9EAD3"
+        assert ws_new.cell(3, 2).fill.start_color.rgb == "00D9EAD3"
+        assert ws_new.cell(4, 2).fill.start_color.rgb == "00EBF1F8"
+
+        ws_complete = wb["완독자"]
+        completion_pairs = {
+            (ws_complete.cell(row, 2).value, ws_complete.cell(row, 3).value)
+            for row in range(3, ws_complete.max_row + 1)
+        }
+        assert ("구약", "both") in completion_pairs
+        assert ("신약", "both") in completion_pairs
+        assert ("둘 다", "both") in completion_pairs
+        assert ("구약", "old_only") in completion_pairs
+        assert ("신약", "old_only") not in completion_pairs
 
 
 class TestMetaSheet:

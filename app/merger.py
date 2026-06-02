@@ -7,6 +7,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from openpyxl import Workbook, load_workbook
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 
+from app.completion import completion_row, expected_dates, is_complete, normalize_part
 from app.output_builder import sort_dates
 from app.style_constants import COL_PAD, ROW_PAD, apply_sheet_style
 from app.drive_uploader import download_drive_file, list_drive_files
@@ -271,33 +272,36 @@ def _merge_dual_user_into(target, user, dates_old, dates_new, emoji, leader):
 
 
 
-def _format_sheet_stats(users, all_dates_sorted):
+def _format_sheet_stats(users, all_dates_sorted, completion_expected=None):
     """성경일독/신약일독 시트용 통계 문자열을 생성한다."""
-    all_dates_set = set(all_dates_sorted)
+    completion_expected_set = set(completion_expected or all_dates_sorted)
     num_dates = len(all_dates_sorted)
     num_members = len(users)
-    num_perfect = sum(1 for u in users if users[u]["dates"] >= all_dates_set)
+    num_perfect = sum(1 for u in users if is_complete(users[u]["dates"], completion_expected_set))
     rate = (num_perfect / num_members * 100) if num_members else 0
     return f"진행: {num_dates}일 | 참여: {num_members}명 | 완독: {num_perfect}명 ({rate:.0f}%)"
 
 
-def _compute_dual_stats(dual_users, all_dates_sorted):
+def _compute_dual_stats(dual_users, all_dates_sorted, old_expected=None, new_expected=None):
     """투트랙 시트용 통계 문자열을 생성한다.
 
     완독 기준: 구약(월~토) AND 신약(월~금) 모두 완독.
     """
     num_dates = len(all_dates_sorted)
     num_members = len(dual_users)
-    all_old = set()
-    all_new = set()
-    for data in dual_users.values():
-        all_old.update(data["dates_old"])
-        all_new.update(data["dates_new"])
-    old_expected = all_old
-    new_expected = all_new
+    if old_expected is None or new_expected is None:
+        all_old = set()
+        all_new = set()
+        for data in dual_users.values():
+            all_old.update(data["dates_old"])
+            all_new.update(data["dates_new"])
+        old_expected = all_old
+        new_expected = all_new
+    old_expected = set(old_expected)
+    new_expected = set(new_expected)
     num_perfect = sum(
         1 for data in dual_users.values()
-        if data["dates_old"] >= old_expected and data["dates_new"] >= new_expected
+        if is_complete(data["dates_old"], old_expected) and is_complete(data["dates_new"], new_expected)
     )
     rate = (num_perfect / num_members * 100) if num_members else 0
     return f"진행: {num_dates}일 | 참여: {num_members}명 | 완독: {num_perfect}명 ({rate:.0f}%)"
@@ -375,6 +379,7 @@ def merge_files(dual_mode="separate"):
     processed_rooms = []
     skipped_files = []
     oldest_file_date = None
+    detected_parts = []
 
     # 4. 파일 병렬 다운로드
     downloads = {}
@@ -408,6 +413,8 @@ def merge_files(dual_mode="separate"):
         track_mode = meta.get("track_mode", "single")
         leader = meta.get("leader", "")
         room_name = meta.get("room_name", "")
+        if meta.get("part"):
+            detected_parts.append(normalize_part(meta.get("part")))
 
         logger.info("파일 처리: %s (schedule=%s, track=%s, leader=%s)",
                      file_name, schedule_type, track_mode, leader)
@@ -485,6 +492,7 @@ def merge_files(dual_mode="separate"):
     logger.info("통합 완료: 성경일독 %d명, 신약일독 %d명, 투트랙 %d명, %d개 방, %d개 스킵",
                 len(bible_users), len(nt_users), len(dual_users),
                 len(processed_rooms), len(skipped_files))
+    part = max(set(detected_parts), key=lambda p: (detected_parts.count(p), p)) if detected_parts else 1
 
     return {
         "success": True,
@@ -494,35 +502,57 @@ def merge_files(dual_mode="separate"):
         "processed_rooms": processed_rooms,
         "skipped_files": skipped_files,
         "oldest_file_date": oldest_file_date,
+        "part": part,
     }
 
 
-def build_merged_xlsx(bible_users, nt_users, dual_users=None):
+def build_merged_xlsx(bible_users, nt_users, dual_users=None, part=1):
     """통합 XLSX 파일을 생성한다.
 
     Args:
         bible_users: {user: {"dates": set, "emoji": str, "leader": str}}
         nt_users: {user: {"dates": set, "emoji": str, "leader": str}}
         dual_users: {user: {"dates_old": set, "dates_new": set, "emoji": str, "leader": str}} (선택)
+        part: 완독 기준 파트 (기본 PART 1)
 
     Returns:
         bytes: XLSX 파일 바이트
     """
     wb = Workbook()
+    bible_expected = expected_dates("bible", part)
+    nt_expected = expected_dates("nt", part)
 
     # 성경일독 시트
     ws_bible = wb.active
     ws_bible.title = "성경일독 진도표"
-    _build_merged_sheet(ws_bible, bible_users, title="2026 꿀성경 통합 진도표")
+    _build_merged_sheet(
+        ws_bible,
+        bible_users,
+        title="2026 꿀성경 통합 진도표",
+        completion_expected=bible_expected,
+    )
 
     # 신약일독 시트
     ws_nt = wb.create_sheet(title="신약일독 진도표")
-    _build_merged_sheet(ws_nt, nt_users, title="2026 꿀성경 통합 진도표")
+    _build_merged_sheet(
+        ws_nt,
+        nt_users,
+        title="2026 꿀성경 통합 진도표",
+        completion_expected=nt_expected,
+    )
 
     # 투트랙 시트 (구약/신약 분리)
     if dual_users:
         ws_dual = wb.create_sheet(title="투트랙 진도표")
-        _build_merged_dual_sheet(ws_dual, dual_users, title="2026 꿀성경 통합 진도표")
+        _build_merged_dual_sheet(
+            ws_dual,
+            dual_users,
+            title="2026 꿀성경 통합 진도표",
+            old_completion_expected=bible_expected,
+            new_completion_expected=nt_expected,
+        )
+
+    _build_merged_completion_sheet(wb, bible_users, nt_users, dual_users or {}, part=part)
 
     buf = io.BytesIO()
     wb.save(buf)
@@ -572,7 +602,84 @@ def _apply_leader_merge(ws, rows, title):
                 )
 
 
-def _build_merged_sheet(ws, users, title=None):
+def _build_merged_completion_sheet(wb, bible_users, nt_users, dual_users, part=1):
+    """통합 XLSX용 완독자 리스트 시트를 생성한다."""
+    bible_expected = expected_dates("bible", part)
+    nt_expected = expected_dates("nt", part)
+
+    rows = []
+    for user in sorted(bible_users.keys(), key=lambda u: (bible_users[u].get("leader", ""), u)):
+        data = bible_users[user]
+        row = completion_row(
+            "성경일독",
+            user,
+            data.get("emoji", ""),
+            data.get("dates", set()),
+            bible_expected,
+            leader=data.get("leader", ""),
+        )
+        if row:
+            rows.append(row)
+
+    for user in sorted(nt_users.keys(), key=lambda u: (nt_users[u].get("leader", ""), u)):
+        data = nt_users[user]
+        row = completion_row(
+            "신약일독",
+            user,
+            data.get("emoji", ""),
+            data.get("dates", set()),
+            nt_expected,
+            leader=data.get("leader", ""),
+        )
+        if row:
+            rows.append(row)
+
+    for user in sorted(dual_users.keys(), key=lambda u: (dual_users[u].get("leader", ""), u)):
+        data = dual_users[user]
+        dates_old = data.get("dates_old", set())
+        dates_new = data.get("dates_new", set())
+        old_complete = is_complete(dates_old, bible_expected)
+        new_complete = is_complete(dates_new, nt_expected)
+
+        old_row = completion_row(
+            "투트랙(구약)",
+            user,
+            data.get("emoji", ""),
+            dates_old,
+            bible_expected,
+            leader=data.get("leader", ""),
+        )
+        if old_row:
+            rows.append(old_row)
+        new_row = completion_row(
+            "투트랙(신약)",
+            user,
+            data.get("emoji", ""),
+            dates_new,
+            nt_expected,
+            leader=data.get("leader", ""),
+        )
+        if new_row:
+            rows.append(new_row)
+        if old_complete and new_complete:
+            total_count = len(bible_expected) + len(nt_expected)
+            rows.append([
+                data.get("leader", ""),
+                "투트랙(둘 다)",
+                user,
+                data.get("emoji", ""),
+                total_count,
+                total_count,
+            ])
+
+    rows.sort(key=lambda row: (row[0], row[2], row[1]))
+    headers = ["담당", "트랙", "이름", "이모티콘", "완독일수", "전체일수"]
+    ws = wb.create_sheet(title="완독자")
+    apply_sheet_style(ws, headers, rows, leader_col=1, completed_rows=range(len(rows)))
+    _apply_leader_merge(ws, rows, title=None)
+
+
+def _build_merged_sheet(ws, users, title=None, completion_expected=None):
     """통합 시트 하나를 생성한다."""
     all_dates = set()
     for data in users.values():
@@ -585,20 +692,29 @@ def _build_merged_sheet(ws, users, title=None):
     sorted_users = sorted(users.keys(), key=lambda u: (users[u].get("leader", ""), u))
 
     rows = []
+    completed_rows = []
     for user in sorted_users:
         data = users[user]
+        if is_complete(data["dates"], completion_expected):
+            completed_rows.append(len(rows))
         row = [data.get("leader", ""), user, data["emoji"]]
         row.extend("O" if d in data["dates"] else "" for d in all_dates_sorted)
         rows.append(row)
 
-    apply_sheet_style(ws, headers, rows, leader_col=1, title=title)
+    apply_sheet_style(ws, headers, rows, leader_col=1, title=title, completed_rows=completed_rows)
     _apply_leader_merge(ws, rows, title)
     if title:
-        stats_text = _format_sheet_stats(users, all_dates_sorted)
+        stats_text = _format_sheet_stats(users, all_dates_sorted, completion_expected=completion_expected)
         _insert_stats_row(ws, stats_text, len(headers))
 
 
-def _build_merged_dual_sheet(ws, dual_users, title=None):
+def _build_merged_dual_sheet(
+    ws,
+    dual_users,
+    title=None,
+    old_completion_expected=None,
+    new_completion_expected=None,
+):
     """투트랙 통합 시트를 생성한다 (사용자별 구약/신약 행 분리)."""
     all_dates = set()
     for data in dual_users.values():
@@ -611,21 +727,31 @@ def _build_merged_dual_sheet(ws, dual_users, title=None):
     sorted_users = sorted(dual_users.keys(), key=lambda u: (dual_users[u].get("leader", ""), u))
 
     rows = []
+    completed_rows = []
     for user in sorted_users:
         data = dual_users[user]
         if data["dates_old"]:
+            if is_complete(data["dates_old"], old_completion_expected):
+                completed_rows.append(len(rows))
             row = [data.get("leader", ""), user, data["emoji"], "구약"]
             row.extend("O" if d in data["dates_old"] else "" for d in all_dates_sorted)
             rows.append(row)
         if data["dates_new"]:
+            if is_complete(data["dates_new"], new_completion_expected):
+                completed_rows.append(len(rows))
             row = [data.get("leader", ""), user, data["emoji"], "신약"]
             row.extend("O" if d in data["dates_new"] else "" for d in all_dates_sorted)
             rows.append(row)
 
-    apply_sheet_style(ws, headers, rows, leader_col=1, title=title)
+    apply_sheet_style(ws, headers, rows, leader_col=1, title=title, completed_rows=completed_rows)
     _apply_leader_merge(ws, rows, title)
     if title:
-        stats_text = _compute_dual_stats(dual_users, all_dates_sorted)
+        stats_text = _compute_dual_stats(
+            dual_users,
+            all_dates_sorted,
+            old_expected=old_completion_expected,
+            new_expected=new_completion_expected,
+        )
         _insert_stats_row(ws, stats_text, len(headers))
 
 
