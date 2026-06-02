@@ -20,6 +20,7 @@ from app.analyzer import (
     resolve_unknown_users,
     sort_dates,
 )
+from app.schedule import BIBLE_PART_DATES
 
 
 class TestDecodeCsvPayload:
@@ -814,16 +815,16 @@ class TestAnalyzeChatLeadingTildeCatchup:
         assert "user1" in result
         assert result["user1"]["dates"] == {"2/2", "2/3", "2/4", "2/5", "2/6", "2/7"}
 
-    def test_30일_상한_초과__스킵(self):
-        # 2/2(P1 시작)부터 ~3/15는 30일 초과 → 상한 스킵
+    def test_일반_범위_30일_상한_초과__스킵(self):
+        # 선행 틸드 catch-up이 아닌 일반 긴 범위는 공지 오탐 방지를 위해 스킵
         csv_text = self._make_csv([
             ["날짜", "이름", "메시지"],
             ["2024-01-01", "user1", "2/2😀"],
-            ["2024-01-02", "user1", "~3/15😀"],
+            ["2024-01-02", "user1", "3/1~4/15😀"],
         ])
         result = analyze_chat(csv_text)
         assert "user1" in result
-        # ~3/15 확장은 30일 초과로 스킵 → 첫 메시지의 2/2만 남음
+        # 3/1~4/15는 30일 초과로 스킵 → 첫 메시지의 2/2만 남음
         assert result["user1"]["dates"] == {"2/2"}
 
     def test_dual_모드__트랙별_last_date_독립_추적(self):
@@ -852,6 +853,36 @@ class TestAnalyzeChatLeadingTildeCatchup:
         result = analyze_chat(csv_text)
         assert "user1" in result
         assert result["user1"]["dates"] == {"2/2", "2/3", "2/4", "2/5"}
+
+    def test_single_모드_캐치업__반복_선행_틸드(self):
+        csv_text = self._make_csv([
+            ["날짜", "이름", "메시지"],
+            ["2024-01-01", "user1", "3/19😀"],
+            ["2024-01-02", "user1", "~~4/27😀"],
+        ])
+        expected = {"3/19"} | {
+            d for d in BIBLE_PART_DATES[0]
+            if (3, 20) <= tuple(map(int, d.split("/"))) <= (4, 27)
+        }
+
+        result = analyze_chat(csv_text)
+
+        assert "user1" in result
+        assert result["user1"]["dates"] == expected
+        assert "3/22" not in result["user1"]["dates"]
+        assert "4/27" in result["user1"]["dates"]
+
+    def test_긴_캐치업_상한_초과__스킵(self):
+        csv_text = self._make_csv([
+            ["날짜", "이름", "메시지"],
+            ["2024-01-01", "user1", "2/2😀"],
+            ["2024-01-02", "user1", "~5/30😀"],
+        ])
+
+        result = analyze_chat(csv_text)
+
+        assert "user1" in result
+        assert result["user1"]["dates"] == {"2/2"}
 
 
 class TestAnalyzeChatScheduleFilter:

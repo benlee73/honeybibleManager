@@ -103,6 +103,31 @@ def _split_concat_days(text):
     return _CONCAT_DAY_PATTERN.sub(_replacer, text)
 
 
+def _clean_message(text):
+    cleaned = _split_concat_days(text)
+    cleaned = re.sub(r"(\d)\s+(\d)", r"\1,\2", cleaned)
+    return re.sub(r"\s+", "", cleaned)
+
+
+def _leading_tilde_end(cleaned):
+    if not cleaned.startswith("~"):
+        return None
+    index = 0
+    while index < len(cleaned) and cleaned[index] == "~":
+        index += 1
+    return index
+
+
+def has_leading_tilde_catchup(message):
+    if not message:
+        return False
+    cleaned = _clean_message(message)
+    index = _leading_tilde_end(cleaned)
+    if index is None:
+        return False
+    return DATE_TOKEN_PATTERN.match(cleaned, index) is not None
+
+
 def _find_last_date_before(target, user_dates):
     """user_dates에서 target보다 앞선 가장 마지막 날짜를 찾는다."""
     best = None
@@ -155,16 +180,14 @@ def _find_tilde_start(target, user_dates):
 def parse_dates(message, last_date=None, user_dates=None, schedule_start=None):
     if not message:
         return []
-    cleaned = _split_concat_days(message)
-    cleaned = re.sub(r"(\d)\s+(\d)", r"\1,\2", cleaned)
-    cleaned = re.sub(r"\s+", "", cleaned)
+    cleaned = _clean_message(message)
     results = []
     index = 0
 
     if cleaned[:1] in ("~", "-") and (
         last_date is not None or user_dates or schedule_start is not None
     ):
-        index = 1
+        index = _leading_tilde_end(cleaned) if cleaned.startswith("~") else 1
         match = DATE_TOKEN_PATTERN.search(cleaned, index)
         if match and match.start() == index:
             month = int(match.group(1))

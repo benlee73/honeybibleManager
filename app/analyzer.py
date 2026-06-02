@@ -1,7 +1,7 @@
 import csv
 import io
 
-from app.date_parser import DATE_TIME_PATTERN, parse_dates
+from app.date_parser import DATE_TIME_PATTERN, has_leading_tilde_catchup, parse_dates
 from app.emoji import extract_trailing_emoji, is_emoji_component, normalize_emoji
 from app.logger import get_logger
 from app.schedule import (
@@ -29,6 +29,7 @@ from app.style_constants import COL_PAD, ROW_PAD  # noqa: F401
 logger = get_logger("analyzer")
 
 MAX_DATES_PER_MESSAGE = 30
+MAX_CATCHUP_DATES_PER_MESSAGE = 45
 
 UNKNOWN_NAME = "(알수없음)"  # normalize_user_name 적용 후의 값
 
@@ -163,6 +164,15 @@ def message_contains_emoji(message, emoji_key, emoji_raw):
     return emoji_key in normalized_message
 
 
+def _is_too_many_dates(message, dates):
+    limit = (
+        MAX_CATCHUP_DATES_PER_MESSAGE
+        if has_leading_tilde_catchup(message)
+        else MAX_DATES_PER_MESSAGE
+    )
+    return len(dates) > limit
+
+
 def extract_tracks(message):
     tracks = set()
     if "구약" in message:
@@ -249,7 +259,7 @@ def analyze_chat(csv_text=None, track_mode="single", rows=None):
         if not dates:
             skip_no_date += 1
             continue
-        if len(dates) > MAX_DATES_PER_MESSAGE:
+        if _is_too_many_dates(message, dates):
             skip_too_many_dates += 1
             continue
         trailing_emoji = extract_trailing_emoji(message)
@@ -267,8 +277,9 @@ def analyze_chat(csv_text=None, track_mode="single", rows=None):
             raw_map[emoji_key] = trailing_emoji
 
     logger.info(
-        "이모지 감지 단계 — 날짜 없음: %d건, 날짜 과다(>%d): %d건, 이모지 없음: %d건",
-        skip_no_date, MAX_DATES_PER_MESSAGE, skip_too_many_dates, skip_no_emoji,
+        "이모지 감지 단계 — 날짜 없음: %d건, 날짜 과다(일반 >%d, catch-up >%d): %d건, 이모지 없음: %d건",
+        skip_no_date, MAX_DATES_PER_MESSAGE, MAX_CATCHUP_DATES_PER_MESSAGE,
+        skip_too_many_dates, skip_no_emoji,
     )
 
     user_emojis = {}
@@ -398,15 +409,20 @@ def analyze_chat(csv_text=None, track_mode="single", rows=None):
         if not dates:
             skip_no_dates_2 += 1
             continue
-        if len(dates) > MAX_DATES_PER_MESSAGE:
+        if (
+            not has_leading_tilde_catchup(message)
+            and len(dates) > MAX_DATES_PER_MESSAGE
+        ):
             skip_too_many_dates_2 += 1
             continue
-
         if track_mode == "dual":
             dates_old = [d for d in dates if d in schedule_old] if "old" in tracks else []
             dates_new = [d for d in dates if d in schedule_new] if "new" in tracks else []
             if not dates_old and not dates_new:
                 skip_schedule_filter += 1
+                continue
+            if _is_too_many_dates(message, list(set(dates_old) | set(dates_new))):
+                skip_too_many_dates_2 += 1
                 continue
             entry = users.setdefault(
                 user,
@@ -435,6 +451,9 @@ def analyze_chat(csv_text=None, track_mode="single", rows=None):
                     skip_schedule_filter += 1
                 dates = filtered_dates
             if not dates:
+                continue
+            if _is_too_many_dates(message, dates):
+                skip_too_many_dates_2 += 1
                 continue
             entry = users.setdefault(
                 user,

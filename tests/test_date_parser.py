@@ -143,8 +143,20 @@ class TestParseDatesLeadingTilde:
         result = parse_dates("~2/7", last_date=(2, 4))
         assert result == ["2/5", "2/6", "2/7"]
 
+    def test_반복_선행_틸드__기본_확장(self):
+        result = parse_dates("~~2/7", last_date=(2, 4))
+        assert result == ["2/5", "2/6", "2/7"]
+
+    def test_반복_선행_틸드__세개도_같게_처리(self):
+        result = parse_dates("~~~2/7", last_date=(2, 4))
+        assert result == ["2/5", "2/6", "2/7"]
+
     def test_선행_틸드__last_date_없으면_기존_동작(self):
         result = parse_dates("~2/7")
+        assert result == ["2/7"]
+
+    def test_반복_선행_틸드__last_date_없으면_기존_동작(self):
+        result = parse_dates("~~2/7")
         assert result == ["2/7"]
 
     def test_선행_틸드__콤마_조합(self):
