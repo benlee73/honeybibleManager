@@ -266,6 +266,7 @@ class TestBuildMergedXlsx:
         assert "성경일독 진도표" in wb.sheetnames
         assert "신약일독 진도표" in wb.sheetnames
         assert "완독자" in wb.sheetnames
+        assert "분석결과" in wb.sheetnames
 
     def test_담당_컬럼_포함(self):
         bible_users = {
@@ -349,6 +350,10 @@ class TestBuildMergedXlsx:
 
         ws_complete = wb["완독자"]
         assert ws_complete.cell(4, 6).value is None
+        assert ws_complete.cell(3, 2).fill.start_color.rgb == "00EBF1F8"
+        assert ws_complete.cell(3, 3).fill.start_color.rgb == "00000000"
+        assert ws_complete.cell(3, 4).fill.start_color.rgb == "00CFE2F3"
+        assert ws_complete.cell(3, 5).fill.start_color.rgb == "00000000"
         completion_pairs = {
             (ws_complete.cell(row, 3).value, ws_complete.cell(row, 4).value)
             for row in range(3, ws_complete.max_row + 1)
@@ -356,6 +361,10 @@ class TestBuildMergedXlsx:
         assert ("성경일독", "complete") in completion_pairs
         assert ("신약일독", "nt_complete") in completion_pairs
         assert ("성경일독", "partial") not in completion_pairs
+
+        ws_analysis = wb["분석결과"]
+        assert ws_analysis.cell(2, 2).value == "분석결과"
+        assert len(ws_analysis._charts) >= 3
 
 
 class TestBuildMergedPreview:
@@ -382,7 +391,7 @@ class TestBuildMergedPreview:
 
 
 class TestBuildMergedXlsxDualUsers:
-    def test_dual_users_전달시_4개_시트_생성(self):
+    def test_dual_users_전달시_5개_시트_생성(self):
         bible_users = {
             "user1": {"dates": {"2/2"}, "emoji": "😀", "leader": "방장A"},
         }
@@ -399,8 +408,9 @@ class TestBuildMergedXlsxDualUsers:
         assert "신약일독 진도표" in wb.sheetnames
         assert "투트랙 진도표" in wb.sheetnames
         assert "완독자" in wb.sheetnames
+        assert "분석결과" in wb.sheetnames
 
-    def test_dual_users_None__완독자_포함_3개_시트_유지(self):
+    def test_dual_users_None__완독자_분석결과_포함_4개_시트_유지(self):
         bible_users = {
             "user1": {"dates": {"2/2"}, "emoji": "😀", "leader": "방장A"},
         }
@@ -411,13 +421,14 @@ class TestBuildMergedXlsxDualUsers:
         assert "성경일독 진도표" in wb.sheetnames
         assert "신약일독 진도표" in wb.sheetnames
         assert "완독자" in wb.sheetnames
+        assert "분석결과" in wb.sheetnames
         assert "투트랙 진도표" not in wb.sheetnames
 
-    def test_dual_users_빈_dict__완독자_포함_3개_시트_유지(self):
+    def test_dual_users_빈_dict__완독자_분석결과_포함_4개_시트_유지(self):
         xlsx_bytes = build_merged_xlsx({}, {}, dual_users={})
         wb = load_workbook(io.BytesIO(xlsx_bytes))
 
-        assert len(wb.sheetnames) == 3
+        assert len(wb.sheetnames) == 4
         assert "투트랙 진도표" not in wb.sheetnames
 
     def test_투트랙_시트_구약_신약_행_분리(self):
@@ -489,6 +500,10 @@ class TestBuildMergedXlsxDualUsers:
 
         ws_complete = wb["완독자"]
         assert ws_complete.cell(4, 6).value is None
+        assert ws_complete.cell(3, 2).fill.start_color.rgb == "00EBF1F8"
+        assert ws_complete.cell(3, 3).fill.start_color.rgb == "00000000"
+        assert ws_complete.cell(3, 4).fill.start_color.rgb == "00CFE2F3"
+        assert ws_complete.cell(3, 5).fill.start_color.rgb == "00000000"
         completion_pairs = {
             (ws_complete.cell(row, 3).value, ws_complete.cell(row, 4).value)
             for row in range(3, ws_complete.max_row + 1)

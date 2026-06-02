@@ -259,3 +259,14 @@ def get_part_schedule(track, part):
     if track == "nt":
         return NT_PART_DATES[part - 1]
     return None
+
+
+def get_part_books(track, part):
+    """track('bible'|'nt') × part(1|2|3)의 대략적인 성경 권 순서를 반환."""
+    if part is None or not (1 <= part <= 3):
+        return ()
+    if track == "bible":
+        return _BIBLE_PART_KEYWORDS[part - 1]
+    if track == "nt":
+        return _NT_PART_KEYWORDS[part - 1]
+    return ()

@@ -6,6 +6,7 @@ import io
 from openpyxl import Workbook
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 
+from app.analytics import add_analysis_sheet, build_output_analysis_records
 from app.completion import (
     TRACK_LABELS,
     completion_row,
@@ -128,7 +129,15 @@ def build_preview_data(users, track_mode="single"):
     return headers, rows
 
 
-def apply_sheet_style(ws, headers, rows, leader_col=None, title=None, completed_rows=None):
+def apply_sheet_style(
+    ws,
+    headers,
+    rows,
+    leader_col=None,
+    title=None,
+    completed_rows=None,
+    completed_scope="row",
+):
     """XLSX 시트에 스타일(헤더, 데이터, 테두리, 고정 틀 등)을 적용한다."""
     header_fill = PatternFill(start_color="D6E4F0", end_color="D6E4F0", fill_type="solid")
     header_font = Font(name="맑은 고딕", size=11)
@@ -218,7 +227,7 @@ def apply_sheet_style(ws, headers, rows, leader_col=None, title=None, completed_
             cell.alignment = center_align
             if leader_col_ws and col_idx == leader_col_ws:
                 cell.fill = name_fill
-            elif is_completed_row:
+            elif is_completed_row and (completed_scope == "row" or col_idx == name_col):
                 cell.fill = completed_row_fill
             elif col_idx == name_col:
                 cell.fill = name_fill
@@ -304,7 +313,13 @@ def _build_completion_sheet(wb, rows):
     """완독자 리스트 시트를 추가한다."""
     headers = ["트랙", "이름", "이모티콘"]
     ws = wb.create_sheet(title="완독자")
-    apply_sheet_style(ws, headers, rows, completed_rows=range(len(rows)))
+    apply_sheet_style(
+        ws,
+        headers,
+        rows,
+        completed_rows=range(len(rows)),
+        completed_scope="name",
+    )
 
 
 def _single_completion_data(users, rows, meta):
@@ -380,6 +395,7 @@ def _dual_completion_data(users, old_rows, new_rows, meta):
 
 def build_output_xlsx(users, track_mode="single", meta=None):
     wb = Workbook()
+    analysis_records = build_output_analysis_records(users, track_mode=track_mode, meta=meta)
 
     if track_mode == "dual":
         old_headers, old_rows, new_headers, new_rows = build_dual_preview_data(users)
@@ -394,6 +410,7 @@ def build_output_xlsx(users, track_mode="single", meta=None):
         ws_new = wb.create_sheet(title="신약 진도표")
         apply_sheet_style(ws_new, new_headers, new_rows, completed_rows=new_completed_rows)
         _build_completion_sheet(wb, completion_rows)
+        add_analysis_sheet(wb, analysis_records)
     else:
         headers, rows = build_preview_data(users, track_mode)
         completed_rows, completion_rows = _single_completion_data(users, rows, meta)
@@ -401,6 +418,7 @@ def build_output_xlsx(users, track_mode="single", meta=None):
         ws.title = "꿀성경 진도표"
         apply_sheet_style(ws, headers, rows, completed_rows=completed_rows)
         _build_completion_sheet(wb, completion_rows)
+        add_analysis_sheet(wb, analysis_records)
 
     if meta:
         _add_meta_sheet(wb, meta)

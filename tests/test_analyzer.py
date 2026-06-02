@@ -612,14 +612,14 @@ class TestBuildOutputXlsx:
         ws = wb.active
         assert ws.freeze_panes == "B3"
 
-    def test_build_output_xlsx__dual_모드__시트_3개_생성(self):
+    def test_build_output_xlsx__dual_모드__시트_4개_생성(self):
         from openpyxl import load_workbook
         users = {
             "user1": {"dates_old": {"2/2"}, "dates_new": {"2/3"}, "emoji": "😀"},
         }
         result = build_output_xlsx(users, track_mode="dual")
         wb = load_workbook(io.BytesIO(result))
-        assert len(wb.sheetnames) == 3
+        assert len(wb.sheetnames) == 4
 
     def test_build_output_xlsx__dual_모드__시트_이름(self):
         from openpyxl import load_workbook
@@ -628,7 +628,7 @@ class TestBuildOutputXlsx:
         }
         result = build_output_xlsx(users, track_mode="dual")
         wb = load_workbook(io.BytesIO(result))
-        assert wb.sheetnames == ["구약 진도표", "신약 진도표", "완독자"]
+        assert wb.sheetnames == ["구약 진도표", "신약 진도표", "완독자", "분석결과"]
 
     def test_build_output_xlsx__dual_모드__트랙_컬럼_없음(self):
         from openpyxl import load_workbook
@@ -759,6 +759,13 @@ class TestBuildOutputXlsx:
         assert ws_complete.cell(2, 5).value is None
         assert ws_complete.cell(3, 2).value == "성경일독"
         assert ws_complete.cell(3, 3).value == "complete"
+        assert ws_complete.cell(3, 2).fill.start_color.rgb == "00000000"
+        assert ws_complete.cell(3, 3).fill.start_color.rgb == "00CFE2F3"
+        assert ws_complete.cell(3, 4).fill.start_color.rgb == "00000000"
+
+        ws_analysis = wb["분석결과"]
+        assert ws_analysis.cell(2, 2).value == "분석결과"
+        assert len(ws_analysis._charts) >= 3
 
     def test_build_output_xlsx__dual_완독자_시트와_트랙별_강조(self):
         from openpyxl import load_workbook
@@ -791,6 +798,9 @@ class TestBuildOutputXlsx:
 
         ws_complete = wb["완독자"]
         assert ws_complete.cell(2, 5).value is None
+        assert ws_complete.cell(3, 2).fill.start_color.rgb == "00000000"
+        assert ws_complete.cell(3, 3).fill.start_color.rgb == "00CFE2F3"
+        assert ws_complete.cell(3, 4).fill.start_color.rgb == "00000000"
         completion_pairs = {
             (ws_complete.cell(row, 2).value, ws_complete.cell(row, 3).value)
             for row in range(3, ws_complete.max_row + 1)

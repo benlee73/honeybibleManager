@@ -12,6 +12,7 @@ from app.schedule import (
     _generate_dates,
     detect_part,
     detect_schedule,
+    get_part_books,
     get_part_schedule,
     get_schedule_start,
 )
@@ -103,6 +104,11 @@ class TestScheduleContents:
         # 성경일독 파트1 종료: 5/30, 신약일독 파트1 종료: 5/29
         assert "5/30" in BIBLE_DATES
         assert "5/30" not in NT_DATES
+
+    def test_get_part_books__파트별_권_목록(self):
+        assert get_part_books("bible", 1)[0] == "창세기"
+        assert get_part_books("nt", 1)[0] == "마태복음"
+        assert get_part_books("unknown", 1) == ()
 
 
 class TestDetectSchedule:
