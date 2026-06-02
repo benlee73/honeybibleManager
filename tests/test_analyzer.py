@@ -109,16 +109,17 @@ class TestAnalyzeChat:
         return output.getvalue()
 
     def test_analyze_chat__normal_csv__assigns_emoji_and_collects_dates(self):
+        # 3/16, 3/17은 PART1 평일이라 진도표 통과
         csv_text = self._make_csv([
             ["날짜", "이름", "메시지"],
-            ["2024-01-01", "user1", "3/15😀"],
-            ["2024-01-02", "user1", "3/16😀"],
+            ["2024-01-01", "user1", "3/16😀"],
+            ["2024-01-02", "user1", "3/17😀"],
         ])
         result = analyze_chat(csv_text)
         assert "user1" in result
         assert "😀" == result["user1"]["emoji"]
-        assert "3/15" in result["user1"]["dates"]
         assert "3/16" in result["user1"]["dates"]
+        assert "3/17" in result["user1"]["dates"]
 
     def test_analyze_chat__user_without_emoji__excluded(self):
         csv_text = self._make_csv([
@@ -144,13 +145,13 @@ class TestAnalyzeChat:
         # 1/1~2/28 범위는 59개 날짜로 확장되어 상한(30) 초과 → 스킵
         csv_text = self._make_csv([
             ["날짜", "이름", "메시지"],
-            ["2024-01-01", "user1", "3/15😀"],
+            ["2024-01-01", "user1", "3/16😀"],
             ["2024-01-02", "user1", "1/1~2/28😀"],
         ])
         result = analyze_chat(csv_text)
         assert "user1" in result
         # 상한 초과 메시지의 날짜는 포함되지 않아야 함
-        assert result["user1"]["dates"] == {"3/15"}
+        assert result["user1"]["dates"] == {"3/16"}
 
     def test_analyze_chat__날짜_수_상한_이하_메시지__정상_처리(self):
         # 2/2~2/20 범위는 19개 날짜로 상한(30) 이하 → 정상 처리
@@ -166,14 +167,14 @@ class TestAnalyzeChat:
     def test_analyze_chat__같은_날짜_여러_메시지__1회로_카운팅(self):
         csv_text = self._make_csv([
             ["날짜", "이름", "메시지"],
-            ["2024-01-01", "user1", "3/15😀"],
-            ["2024-01-02", "user1", "3/15😀"],
-            ["2024-01-03", "user1", "3/15😀"],
-            ["2024-01-04", "user1", "3/16😀"],
+            ["2024-01-01", "user1", "3/16😀"],
+            ["2024-01-02", "user1", "3/16😀"],
+            ["2024-01-03", "user1", "3/16😀"],
+            ["2024-01-04", "user1", "3/17😀"],
         ])
         result = analyze_chat(csv_text)
         assert "user1" in result
-        assert result["user1"]["dates"] == {"3/15", "3/16"}
+        assert result["user1"]["dates"] == {"3/16", "3/17"}
         assert len(result["user1"]["dates"]) == 2
 
 
@@ -803,25 +804,27 @@ class TestAnalyzeChatLeadingTildeCatchup:
         assert "user1" in result
         assert result["user1"]["dates"] == {"2/4", "2/5", "2/6", "2/7"}
 
-    def test_첫_메시지_선행_틸드__last_date_없음__단일_날짜(self):
+    def test_첫_메시지_선행_틸드__schedule_start로_채움(self):
+        # 첫 메시지 ~2/7은 진도표 시작일(2/2)부터 채워진다 (일요일 2/8 미포함)
         csv_text = self._make_csv([
             ["날짜", "이름", "메시지"],
             ["2024-01-01", "user1", "~2/7😀"],
         ])
         result = analyze_chat(csv_text)
         assert "user1" in result
-        assert result["user1"]["dates"] == {"2/7"}
+        assert result["user1"]["dates"] == {"2/2", "2/3", "2/4", "2/5", "2/6", "2/7"}
 
     def test_30일_상한_초과__스킵(self):
+        # 2/2(P1 시작)부터 ~3/15는 30일 초과 → 상한 스킵
         csv_text = self._make_csv([
             ["날짜", "이름", "메시지"],
-            ["2024-01-01", "user1", "1/1😀"],
-            ["2024-01-02", "user1", "~2/28😀"],
+            ["2024-01-01", "user1", "2/2😀"],
+            ["2024-01-02", "user1", "~3/15😀"],
         ])
         result = analyze_chat(csv_text)
         assert "user1" in result
-        # ~2/28은 1/2~2/28=58일 → 상한(30) 초과 → 스킵
-        assert result["user1"]["dates"] == {"1/1"}
+        # ~3/15 확장은 30일 초과로 스킵 → 첫 메시지의 2/2만 남음
+        assert result["user1"]["dates"] == {"2/2"}
 
     def test_dual_모드__트랙별_last_date_독립_추적(self):
         csv_text = self._make_csv([
@@ -839,15 +842,16 @@ class TestAnalyzeChatLeadingTildeCatchup:
         assert result["user1"]["dates_new"] == {"2/4", "2/5", "2/6"}
 
     def test_연속_캐치업(self):
+        # 2/1은 일요일이라 P1 진도표에서 제외됨, 2/2부터 채워짐
         csv_text = self._make_csv([
             ["날짜", "이름", "메시지"],
-            ["2024-01-01", "user1", "2/1😀"],
+            ["2024-01-01", "user1", "2/2😀"],
             ["2024-01-02", "user1", "~2/3😀"],
             ["2024-01-03", "user1", "~2/5😀"],
         ])
         result = analyze_chat(csv_text)
         assert "user1" in result
-        assert result["user1"]["dates"] == {"2/1", "2/2", "2/3", "2/4", "2/5"}
+        assert result["user1"]["dates"] == {"2/2", "2/3", "2/4", "2/5"}
 
 
 class TestAnalyzeChatScheduleFilter:
@@ -872,15 +876,17 @@ class TestAnalyzeChatScheduleFilter:
         assert "2/8" not in result["user1"]["dates"]
         assert "2/9" in result["user1"]["dates"]
 
-    def test_single_키워드_없음__필터링_없이_전체_통과(self):
-        # 키워드 없으면 schedule=None → 필터 미적용
+    def test_single_키워드_없음_날짜만__날짜로_파트_감지하여_필터_적용(self):
+        # 키워드 없어도 날짜로 PART1 자동 감지 → 일요일 2/8은 제외
         csv_text = self._make_csv([
             ["날짜", "이름", "메시지"],
-            ["2024-01-01", "user1", "2/8😀"],
+            ["2024-01-01", "user1", "2/7😀"],
+            ["2024-01-02", "user1", "2/8😀"],
         ])
         result = analyze_chat(csv_text)
         assert "user1" in result
-        assert "2/8" in result["user1"]["dates"]
+        assert "2/7" in result["user1"]["dates"]
+        assert "2/8" not in result["user1"]["dates"]
 
     def test_dual_모드__트랙별_진도표_적용(self):
         # dual 모드: 구약 → BIBLE_DATES, 신약 → NT_DATES
@@ -961,12 +967,12 @@ class TestDecodePayloadAlias:
 class TestAnalyzeChatWithRows:
     def test_rows_파라미터_직접_전달(self):
         rows = [
-            ("user1", "3/15😀"),
             ("user1", "3/16😀"),
+            ("user1", "3/17😀"),
         ]
         result = analyze_chat(rows=rows)
         assert "user1" in result
-        assert result["user1"]["dates"] == {"3/15", "3/16"}
+        assert result["user1"]["dates"] == {"3/16", "3/17"}
 
     def test_rows_파라미터_dual_모드(self):
         rows = [
@@ -979,7 +985,7 @@ class TestAnalyzeChatWithRows:
         assert result["user1"]["dates_new"] == {"2/3"}
 
     def test_csv_text와_rows_동시_전달시_rows_우선(self):
-        rows = [("user1", "3/15😀")]
+        rows = [("user1", "3/16😀")]
         result = analyze_chat(csv_text="invalid", rows=rows)
         assert "user1" in result
 

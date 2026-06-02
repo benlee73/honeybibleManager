@@ -150,15 +150,17 @@ def detect_schedule_type(rows, room_name, track_mode):
     Returns:
         str: "dual", "education", "bible", "nt", "unknown" 중 하나
     """
-    from app.schedule import BIBLE_DATES, NT_DATES, detect_schedule
+    from app.schedule import BIBLE_PART_DATES, NT_PART_DATES, detect_schedule
 
     if track_mode == "dual":
         return "dual"
     if room_name and "교육국" in room_name:
         return "education"
     schedule = detect_schedule(rows)
-    if schedule is BIBLE_DATES:
+    if schedule is None:
+        return "unknown"
+    if schedule in BIBLE_PART_DATES:
         return "bible"
-    if schedule is NT_DATES:
+    if schedule in NT_PART_DATES:
         return "nt"
     return "unknown"

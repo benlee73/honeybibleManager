@@ -4,7 +4,15 @@ import io
 from app.date_parser import DATE_TIME_PATTERN, parse_dates
 from app.emoji import extract_trailing_emoji, is_emoji_component, normalize_emoji
 from app.logger import get_logger
-from app.schedule import BIBLE_DATES, NT_DATES, detect_schedule, get_schedule_start
+from app.schedule import (
+    BIBLE_DATES,
+    BIBLE_PART_DATES,
+    NT_DATES,
+    NT_PART_DATES,
+    detect_part,
+    detect_schedule,
+    get_schedule_start,
+)
 
 # 출력 함수를 output_builder에서 re-export (하위호환)
 from app.output_builder import (  # noqa: F401
@@ -292,12 +300,15 @@ def analyze_chat(csv_text=None, track_mode="single", rows=None):
         logger.debug("  %s → %s", user, info["emoji"])
 
     if track_mode == "dual":
-        schedule_old = BIBLE_DATES
-        schedule_new = NT_DATES
-        schedule_start_old = get_schedule_start(BIBLE_DATES)
-        schedule_start_new = get_schedule_start(NT_DATES)
-        logger.info("듀얼 모드 — 구약 진도표 날짜 %d개, 신약 진도표 날짜 %d개",
-                     len(schedule_old), len(schedule_new))
+        part = detect_part(rows) or 1
+        schedule_old = BIBLE_PART_DATES[part - 1]
+        schedule_new = NT_PART_DATES[part - 1]
+        schedule_start_old = get_schedule_start(schedule_old)
+        schedule_start_new = get_schedule_start(schedule_new)
+        logger.info(
+            "듀얼 모드 — PART %d (구약 %d개, 신약 %d개)",
+            part, len(schedule_old), len(schedule_new),
+        )
     else:
         schedule = detect_schedule(rows)
         schedule_start = get_schedule_start(schedule) if schedule is not None else None
