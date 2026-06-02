@@ -4,7 +4,7 @@ import io
 from app.date_parser import DATE_TIME_PATTERN, parse_dates
 from app.emoji import extract_trailing_emoji, is_emoji_component, normalize_emoji
 from app.logger import get_logger
-from app.schedule import BIBLE_DATES, NT_DATES, detect_schedule
+from app.schedule import BIBLE_DATES, NT_DATES, detect_schedule, get_schedule_start
 
 # 출력 함수를 output_builder에서 re-export (하위호환)
 from app.output_builder import (  # noqa: F401
@@ -294,10 +294,13 @@ def analyze_chat(csv_text=None, track_mode="single", rows=None):
     if track_mode == "dual":
         schedule_old = BIBLE_DATES
         schedule_new = NT_DATES
+        schedule_start_old = get_schedule_start(BIBLE_DATES)
+        schedule_start_new = get_schedule_start(NT_DATES)
         logger.info("듀얼 모드 — 구약 진도표 날짜 %d개, 신약 진도표 날짜 %d개",
                      len(schedule_old), len(schedule_new))
     else:
         schedule = detect_schedule(rows)
+        schedule_start = get_schedule_start(schedule) if schedule is not None else None
         if schedule is not None:
             logger.info("싱글 모드 — 진도표 감지됨 (유효 날짜 %d개)", len(schedule))
         else:
@@ -360,12 +363,26 @@ def analyze_chat(csv_text=None, track_mode="single", rows=None):
                     user_dates = entry.get("dates_old", set()) | entry.get("dates_new", set())
             else:
                 user_dates = None
-            dates = parse_dates(message, last_date=last_date, user_dates=user_dates)
+            if tracks == {"new"}:
+                track_start = schedule_start_new
+            else:
+                track_start = schedule_start_old
+            dates = parse_dates(
+                message,
+                last_date=last_date,
+                user_dates=user_dates,
+                schedule_start=track_start,
+            )
         else:
             last_date = user_last_date.get(user)
             entry = users.get(user)
             user_dates = entry.get("dates") if entry else None
-            dates = parse_dates(message, last_date=last_date, user_dates=user_dates)
+            dates = parse_dates(
+                message,
+                last_date=last_date,
+                user_dates=user_dates,
+                schedule_start=schedule_start,
+            )
 
         if not dates:
             skip_no_dates_2 += 1

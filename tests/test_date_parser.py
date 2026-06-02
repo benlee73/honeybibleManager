@@ -279,3 +279,31 @@ class TestParseDatesTildeWithUserDates:
         result = parse_dates("~3/7☘️", user_dates=user_dates)
         # 1/1은 3/7 기준 30일 이상 전이므로 사용되지 않음
         assert result == []
+
+
+class TestParseDatesScheduleStart:
+    def test_schedule_start__last_date와_user_dates_없으면_시작일부터_채움(self):
+        # 진도표 시작일이 2/2이면 ~3/3 → 2/2부터 3/3까지
+        result = parse_dates("~3/3🍫", schedule_start=(2, 2))
+        assert result[0] == "2/2"
+        assert result[-1] == "3/3"
+        assert "2/15" in result
+
+    def test_schedule_start__last_date_있으면_last_date_우선(self):
+        result = parse_dates("~3/3🍫", last_date=(2, 26), schedule_start=(2, 2))
+        # last_date가 우선되어 2/27부터 시작
+        assert result == ["2/27", "2/28", "3/1", "3/2", "3/3"]
+
+    def test_schedule_start__user_dates_있으면_user_dates_우선(self):
+        result = parse_dates(
+            "~3/3🍫", user_dates={"2/28"}, schedule_start=(2, 2)
+        )
+        # user_dates의 가장 오래된 날짜 기준
+        assert result[0] == "3/1"
+        assert result[-1] == "3/3"
+
+    def test_schedule_start__none이면_틸드_확장_안됨(self):
+        # schedule_start/last_date/user_dates 모두 없으면 틸드 분기 미진입,
+        # 일반 파싱 fallback으로 3/3만 잡힌다
+        result = parse_dates("~3/3🍫", schedule_start=None)
+        assert result == ["3/3"]

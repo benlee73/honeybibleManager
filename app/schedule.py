@@ -38,6 +38,17 @@ BIBLE_DATES = _generate_dates(_BIBLE_RANGES, exclude_weekdays=(6,))
 NT_DATES = _generate_dates(_NT_RANGES, exclude_weekdays=(5, 6))
 
 
+def get_schedule_start(schedule):
+    """진도표(BIBLE_DATES/NT_DATES)에 해당하는 첫 인증 날짜를 (month, day)로 반환."""
+    if schedule is BIBLE_DATES:
+        d = _BIBLE_RANGES[0][0]
+    elif schedule is NT_DATES:
+        d = _NT_RANGES[0][0]
+    else:
+        return None
+    return (d.month, d.day)
+
+
 def detect_schedule(rows):
     """CSV 메시지들에서 키워드 감지하여 진도표 선택.
 

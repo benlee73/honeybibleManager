@@ -152,7 +152,7 @@ def _find_tilde_start(target, user_dates):
     return best
 
 
-def parse_dates(message, last_date=None, user_dates=None):
+def parse_dates(message, last_date=None, user_dates=None, schedule_start=None):
     if not message:
         return []
     cleaned = _split_concat_days(message)
@@ -161,7 +161,9 @@ def parse_dates(message, last_date=None, user_dates=None):
     results = []
     index = 0
 
-    if cleaned[:1] in ("~", "-") and (last_date is not None or user_dates):
+    if cleaned[:1] in ("~", "-") and (
+        last_date is not None or user_dates or schedule_start is not None
+    ):
         index = 1
         match = DATE_TOKEN_PATTERN.search(cleaned, index)
         if match and match.start() == index:
@@ -175,6 +177,10 @@ def parse_dates(message, last_date=None, user_dates=None):
                     start = _find_tilde_start((month, day), user_dates)
                 if start is None:
                     start = last_date
+                # 사용자의 첫 ~M/D 메시지: 진도표 시작일부터 채운다.
+                # expand_range는 시작일을 제외하므로 하루 전을 시작점으로 넘긴다.
+                if start is None and schedule_start is not None:
+                    start = _go_back_days(schedule_start, 1)
                 if start is not None:
                     results.extend(
                         expand_range(start[0], start[1], month, day)
