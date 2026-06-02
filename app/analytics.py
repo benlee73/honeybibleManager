@@ -828,21 +828,20 @@ def _formula_dropout_rows(records, helper_info, start_row, start_col):
         excel_row = start_row + offset
         raw_count_cell = _cell_addr(excel_row, criteria_col + 3)
         week_start, week_end = _week_order_bounds(week_label)
-        raw_count = (
-            f'COUNTIFS({status_range},"하차 추정",'
-            f'{last_order_range},">={week_start}",'
-            f'{last_order_range},"<={week_end}")'
+        raw_match = (
+            f'({status_range}="하차 추정")*'
+            f'({last_order_range}>={week_start})*'
+            f'({last_order_range}<={week_end})'
         )
+        raw_count = f"SUMPRODUCT({raw_match})"
         count_formula = f'=IF({raw_count}=0,"",{raw_count})'
         date_formula = (
             f'=IF({raw_count_cell}="","",TEXTJOIN(", ",TRUE,UNIQUE(FILTER('
-            f'{last_date_range},({status_range}="하차 추정")*'
-            f'({last_order_range}>={week_start})*({last_order_range}<={week_end})))))'
+            f'{last_date_range},{raw_match}))))'
         )
         position_formula = (
             f'=IF({raw_count_cell}="","",TEXTJOIN(" / ",TRUE,UNIQUE(FILTER('
-            f'{position_range},({status_range}="하차 추정")*'
-            f'({last_order_range}>={week_start})*({last_order_range}<={week_end})))))'
+            f'{position_range},{raw_match}))))'
         )
         raw_rows.append([week_label, date_formula, position_formula, count_formula])
 
@@ -850,13 +849,21 @@ def _formula_dropout_rows(records, helper_info, start_row, start_col):
     raw_end = _cell_addr(start_row + len(raw_rows), criteria_col + 3)
     raw_count_start = _cell_addr(start_row + 1, criteria_col + 3)
     raw_count_end = _cell_addr(start_row + len(raw_rows), criteria_col + 3)
-    filtered = f"FILTER({raw_start}:{raw_end},{raw_count_start}:{raw_count_end}<>\"\")"
-    formula = (
-        f'=IFERROR(TAKE({filtered},{DROPOUT_VISIBLE_LIMIT}),'
-        '{"-","","하차 추정 없음",""})'
-    )
-    visible_rows = [[formula, "", "", ""]]
-    return visible_rows, raw_rows, min(DROPOUT_VISIBLE_LIMIT, max(1, len(raw_rows)))
+    visible_rows = []
+    for slot in range(1, DROPOUT_VISIBLE_LIMIT + 1):
+        row_fallbacks = ["-", "", "하차 추정 없음", ""] if slot == 1 else ["", "", "", ""]
+        visible_row = []
+        for col_offset, fallback in enumerate(row_fallbacks):
+            raw_col = get_column_letter(criteria_col + col_offset)
+            raw_col_range = f"{raw_col}{start_row + 1}:{raw_col}{start_row + len(raw_rows)}"
+            formula = (
+                f'=IFERROR(INDEX(FILTER({raw_col_range},'
+                f'{raw_count_start}:{raw_count_end}<>""),{slot}),'
+                f'{_xl_literal(fallback)})'
+            )
+            visible_row.append(formula)
+        visible_rows.append(visible_row)
+    return visible_rows, raw_rows, DROPOUT_VISIBLE_LIMIT
 
 
 def _source_has_date_formula(source, date_value):

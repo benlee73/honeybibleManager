@@ -768,13 +768,14 @@ class TestBuildOutputXlsx:
         assert ws_analysis.cell(6, 3).value.startswith("=COUNTA(")
         assert ws_analysis.cell(23, 2).value == "하차 주"
         assert ws_analysis.cell(23, 6).value is None
-        assert ws_analysis.cell(24, 2).value.startswith("=IFERROR(TAKE(FILTER(")
-        assert ws_analysis.cell(24, 3).value is None
-        assert ws_analysis.cell(24, 5).value is None
+        assert ws_analysis.cell(24, 2).value.startswith("=IFERROR(INDEX(FILTER(M24:M")
+        assert ws_analysis.cell(24, 3).value.startswith("=IFERROR(INDEX(FILTER(N24:N")
+        assert ws_analysis.cell(24, 5).value.startswith("=IFERROR(INDEX(FILTER(P24:P")
+        assert ws_analysis.cell(25, 2).value.startswith("=IFERROR(INDEX(FILTER(M24:M")
         assert ws_analysis.cell(24, 13).value == "2/2~2/8"
         assert ws_analysis.cell(25, 13).value == "2/9~2/15"
         assert ws_analysis.cell(24, 14).value.startswith("=IF(P24=\"\",\"\",TEXTJOIN(")
-        assert ws_analysis.cell(24, 16).value.startswith("=IF(COUNTIFS(")
+        assert ws_analysis.cell(24, 16).value.startswith("=IF(SUMPRODUCT(")
         assert "$U$2:$U$3" in ws_analysis.cell(24, 16).value
         assert "$T$2:$T$3" not in ws_analysis.cell(24, 16).value
         assert ws_analysis.column_dimensions["M"].hidden is True
