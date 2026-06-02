@@ -173,8 +173,12 @@ def test_하차_주_분포__같은_주_여러_위치를_하나로_묶음():
     assert dropout[0]["week"] == "2/2~2/8"
     assert dropout[0]["date"] == "2/2"
     assert dropout[0]["count"] == 2
-    assert "창세기 부근" in dropout[0]["position"]
-    assert "마태복음 부근" in dropout[0]["position"]
+    assert "창세기" in dropout[0]["position"]
+    assert "마태복음" in dropout[0]["position"]
+    assert "부근" not in dropout[0]["position"]
+    assert dropout[0]["bible"] == 1
+    assert dropout[0]["nt"] == 1
+    assert dropout[0]["dual"] == 0
 
 
 def test_하차_주_분포__트랙_접두어와_중복_위치를_정리():
@@ -212,7 +216,7 @@ def test_하차_주_분포__트랙_접두어와_중복_위치를_정리():
     dropout = dropout_week_distribution(records)
 
     assert len(dropout) == 1
-    assert dropout[0]["position"] == "사사기 부근 / 룻기 부근"
+    assert dropout[0]["position"] == "사사기 / 룻기"
 
 
 def test_투트랙_신약_진행위치는_신약_권명으로_계산():
@@ -257,11 +261,25 @@ def test_add_analysis_sheet__표와_차트_생성():
     assert ws.cell(20, 2).value == "합"
     assert ws.cell(24, 2).value == "주차"
     assert ws.cell(24, 3).value == "하차 주"
+    assert ws.cell(24, 4).value == "진행 위치"
+    assert ws.cell(24, 5).value == "성경일독"
+    assert ws.cell(24, 6).value == "신약일독"
+    assert ws.cell(24, 7).value == "투트랙"
+    assert ws.cell(24, 8).value == "합"
+    assert "마지막 인증일" not in [ws.cell(24, col).value for col in range(2, 9)]
     assert ws.cell(25, 2).value == "1주차"
     assert ws.cell(25, 3).value == "2/2~2/8"
     assert "|" not in ws.cell(25, 3).value
-    assert ws.cell(25, 5).alignment.wrap_text is True
-    assert ws.cell(25, 5).alignment.horizontal == "left"
-    assert ws.cell(24, 7).value is None
-    assert ws.column_dimensions["F"].width >= 40
+    assert ws.cell(25, 4).value == "창세기"
+    assert "부근" not in ws.cell(25, 4).value
+    assert ws.cell(25, 4).alignment.wrap_text is False
+    assert ws.cell(25, 4).alignment.horizontal == "left"
+    assert ws.cell(25, 5).value == 1
+    assert ws.cell(25, 8).value == 1
+    assert ws.cell(26, 2).value == "합"
+    assert ws.cell(26, 5).value == 1
+    assert ws.cell(26, 8).value == 1
+    assert ws.column_dimensions["D"].width >= 40
     assert len(ws._charts) >= 3
+    assert type(ws._charts[0]).__name__ == "LineChart"
+    assert len(ws._charts[0].series) == 3

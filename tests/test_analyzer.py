@@ -770,25 +770,37 @@ class TestBuildOutputXlsx:
         assert ws_analysis.cell(20, 3).value == "=SUM(C14:C19)"
         assert ws_analysis.cell(24, 2).value == "주차"
         assert ws_analysis.cell(24, 3).value == "하차 주"
-        assert ws_analysis.cell(24, 7).value is None
+        assert ws_analysis.cell(24, 4).value == "진행 위치"
+        assert ws_analysis.cell(24, 5).value == "성경일독"
+        assert ws_analysis.cell(24, 6).value == "신약일독"
+        assert ws_analysis.cell(24, 7).value == "투트랙"
+        assert ws_analysis.cell(24, 8).value == "합"
+        assert "마지막 인증일" not in [ws_analysis.cell(24, col).value for col in range(2, 9)]
         assert ws_analysis.cell(25, 2).value == "1주차"
         assert ws_analysis.cell(25, 3).value == "=M25"
         assert ws_analysis.cell(25, 4).value == "=N25"
         assert ws_analysis.cell(25, 5).value == "=O25"
         assert ws_analysis.cell(25, 6).value == "=P25"
+        assert ws_analysis.cell(25, 7).value == "=Q25"
+        assert ws_analysis.cell(25, 8).value == "=R25"
         assert ws_analysis.cell(33, 2).value == "9주차"
+        assert ws_analysis.cell(42, 2).value == "합"
+        assert ws_analysis.cell(42, 5).value == "=SUM(E25:E41)"
+        assert ws_analysis.cell(42, 8).value == "=SUM(H25:H41)"
         assert ws_analysis.cell(25, 13).value == "2/2~2/8"
         assert ws_analysis.cell(26, 13).value == "2/9~2/15"
         assert ws_analysis.cell(33, 13).value == "3/30~4/5"
-        assert ws_analysis.cell(25, 14).value.startswith("=IF(P25=0,\"\",TEXTJOIN(")
-        assert "SPLIT(TEXTJOIN" in ws_analysis.cell(25, 15).value
-        assert "$V$2:$V$3" in ws_analysis.cell(25, 15).value
-        assert ws_analysis.cell(25, 16).value.startswith("=SUMPRODUCT(")
-        assert "$U$2:$U$3" in ws_analysis.cell(25, 16).value
-        assert "$T$2:$T$3" not in ws_analysis.cell(25, 16).value
+        assert "SPLIT(TEXTJOIN" in ws_analysis.cell(25, 14).value
+        assert "$V$2:$V$3" in ws_analysis.cell(25, 14).value
+        assert ws_analysis.cell(25, 15).value.startswith("=SUMPRODUCT(")
+        assert "$U$2:$U$3" in ws_analysis.cell(25, 15).value
+        assert "$T$2:$T$3" not in ws_analysis.cell(25, 15).value
+        assert ws_analysis.cell(25, 18).value == "=SUM(O25:Q25)"
         assert ws_analysis.column_dimensions["M"].hidden is True
-        assert ws_analysis.column_dimensions["P"].hidden is True
+        assert ws_analysis.column_dimensions["R"].hidden is True
         assert len(ws_analysis._charts) >= 3
+        assert type(ws_analysis._charts[0]).__name__ == "LineChart"
+        assert len(ws_analysis._charts[0].series) == 3
 
         ws_helper = wb["_분석계산"]
         assert ws_helper.sheet_state == "hidden"
@@ -800,7 +812,7 @@ class TestBuildOutputXlsx:
         assert ws_helper.cell(2, 20).value.startswith("=IF(U2=0")
         assert "K2" not in ws_helper.cell(2, 20).value
         assert ws_helper.cell(2, 21).value == "=MAX(O2,R2)"
-        assert ws_helper.cell(2, 22).value == "=L2"
+        assert ws_helper.cell(2, 22).value == '=SUBSTITUTE(SUBSTITUTE(L2," 부근",""),"부근","")'
 
     def test_build_output_xlsx__dual_완독자_시트와_트랙별_강조(self):
         from openpyxl import load_workbook
