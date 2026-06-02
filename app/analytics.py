@@ -19,8 +19,22 @@ GROUP_NT = "신약일독"
 GROUP_DUAL = "투트랙"
 GROUPS = [GROUP_ALL, GROUP_BIBLE, GROUP_NT, GROUP_DUAL]
 
-PROGRESS_BUCKETS = ["0%", "1~25%", "26~50%", "51~75%", "76~99%", "100%"]
+PROGRESS_BUCKET_SPECS = [
+    ("0~10%", None, 0.10),
+    ("11~20%", 0.10, 0.20),
+    ("21~30%", 0.20, 0.30),
+    ("31~40%", 0.30, 0.40),
+    ("41~50%", 0.40, 0.50),
+    ("51~60%", 0.50, 0.60),
+    ("61~70%", 0.60, 0.70),
+    ("71~80%", 0.70, 0.80),
+    ("81~89%", 0.80, 0.90),
+    ("90~99%", 0.90, 1.0),
+    ("100%", 1.0, None),
+]
+PROGRESS_BUCKETS = [label for label, _, _ in PROGRESS_BUCKET_SPECS]
 FORMULA_HELPER_SHEET = "_분석계산"
+CHART_ANCHOR_COL = "J"
 
 
 @dataclass(frozen=True)
@@ -329,18 +343,16 @@ def summarize_records(records):
 
 
 def _bucket_for_rate(rate):
-    if rate <= 0:
-        return "0%"
     if rate >= 1:
         return "100%"
-    percent = rate * 100
-    if percent <= 25:
-        return "1~25%"
-    if percent <= 50:
-        return "26~50%"
-    if percent <= 75:
-        return "51~75%"
-    return "76~99%"
+    for label, lower, upper in PROGRESS_BUCKET_SPECS:
+        if label == "100%":
+            continue
+        above_lower = True if lower is None else (rate >= lower if label == "90~99%" else rate > lower)
+        below_upper = True if upper is None else (rate < upper if label in ("81~89%", "90~99%") else rate <= upper)
+        if above_lower and below_upper:
+            return label
+    return "90~99%"
 
 
 def progress_distribution(records):
@@ -838,14 +850,13 @@ def _progress_bucket_formula(helper_info, bucket, group):
         return "=0"
     group_range = _helper_range(helper, "B", first, last)
     progress_range = _helper_range(helper, "I", first, last)
-    criteria = {
-        "0%": [(progress_range, "<=0")],
-        "1~25%": [(progress_range, ">0"), (progress_range, "<=0.25")],
-        "26~50%": [(progress_range, ">0.25"), (progress_range, "<=0.5")],
-        "51~75%": [(progress_range, ">0.5"), (progress_range, "<=0.75")],
-        "76~99%": [(progress_range, ">0.75"), (progress_range, "<1")],
-        "100%": [(progress_range, ">=1")],
-    }[bucket]
+    specs = {label: (lower, upper) for label, lower, upper in PROGRESS_BUCKET_SPECS}
+    lower, upper = specs[bucket]
+    criteria = []
+    if lower is not None:
+        criteria.append((progress_range, f">={lower}" if bucket in ("90~99%", "100%") else f">{lower}"))
+    if upper is not None:
+        criteria.append((progress_range, f"<{upper}" if bucket in ("81~89%", "90~99%") else f"<={upper}"))
     parts = []
     if group != GROUP_ALL:
         parts.extend([group_range, _xl_text(group)])
@@ -1117,7 +1128,7 @@ def add_analysis_sheet(wb, records):
     chart.set_categories(categories)
     chart.height = 7
     chart.width = 16
-    ws.add_chart(chart, "H11")
+    ws.add_chart(chart, f"{CHART_ANCHOR_COL}11")
 
     row += len(dist_rows) + 4
     _section_title(ws, row, col, "하차 추정 분포")
@@ -1169,7 +1180,7 @@ def add_analysis_sheet(wb, records):
         chart.set_categories(categories)
         chart.height = 7
         chart.width = 16
-        ws.add_chart(chart, f"H{dropout_table_row}")
+        ws.add_chart(chart, f"{CHART_ANCHOR_COL}{dropout_table_row}")
 
     row += len(dropout_rows) + 4
     _section_title(ws, row, col, "날짜별 인증 인원 추이")
@@ -1192,7 +1203,7 @@ def add_analysis_sheet(wb, records):
         chart.set_categories(categories)
         chart.height = 7
         chart.width = 16
-        ws.add_chart(chart, f"H{trend_table_row}")
+        ws.add_chart(chart, f"{CHART_ANCHOR_COL}{trend_table_row}")
 
     row += len(trend_rows) + 4
     _section_title(ws, row, col, "상세 명단")
@@ -1279,7 +1290,7 @@ def add_formula_analysis_sheet(wb, records, part=1):
     chart.set_categories(categories)
     chart.height = 7
     chart.width = 16
-    ws.add_chart(chart, "H11")
+    ws.add_chart(chart, f"{CHART_ANCHOR_COL}11")
 
     row += len(dist_rows) + 4
     _section_title(ws, row, col, "하차 추정 분포")
@@ -1318,7 +1329,7 @@ def add_formula_analysis_sheet(wb, records, part=1):
     chart.set_categories(categories)
     chart.height = 7
     chart.width = 16
-    ws.add_chart(chart, f"H{dropout_table_row}")
+    ws.add_chart(chart, f"{CHART_ANCHOR_COL}{dropout_table_row}")
 
     row += dropout_visible_slots + 4
     _section_title(ws, row, col, "날짜별 인증 인원 추이")
@@ -1342,7 +1353,7 @@ def add_formula_analysis_sheet(wb, records, part=1):
     chart.set_categories(categories)
     chart.height = 7
     chart.width = 16
-    ws.add_chart(chart, f"H{trend_table_row}")
+    ws.add_chart(chart, f"{CHART_ANCHOR_COL}{trend_table_row}")
 
     row += len(trend_rows) + 4
     _section_title(ws, row, col, "상세 명단")

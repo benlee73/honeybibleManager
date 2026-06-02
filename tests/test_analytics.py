@@ -131,8 +131,9 @@ def test_진행률_분포와_하차_분포():
     records = build_output_analysis_records(users, meta={"schedule_type": "bible", "part": 1})
 
     progress = {row["bucket"]: row for row in progress_distribution(records)}
-    assert progress["0%"][GROUP_ALL] == 1
-    assert progress["1~25%"][GROUP_ALL] == 1
+    assert progress["0~10%"][GROUP_ALL] == 2
+    assert progress["11~20%"][GROUP_ALL] == 0
+    assert progress["90~99%"][GROUP_ALL] == 0
     assert progress["100%"][GROUP_ALL] == 1
 
     dropout = dropout_distribution(records)
@@ -258,28 +259,33 @@ def test_add_analysis_sheet__표와_차트_생성():
     assert ws.cell(2, 2).value == "분석결과"
     assert ws.cell(5, 2).value == "그룹"
     assert ws.cell(6, 2).value == "전체"
-    assert ws.cell(20, 2).value == "합"
-    assert ws.cell(24, 2).value == "주차"
-    assert ws.cell(24, 3).value == "하차 주"
-    assert ws.cell(24, 4).value == "진행 위치"
-    assert ws.cell(24, 5).value == "성경일독"
-    assert ws.cell(24, 6).value == "신약일독"
-    assert ws.cell(24, 7).value == "투트랙"
-    assert ws.cell(24, 8).value == "합"
-    assert "마지막 인증일" not in [ws.cell(24, col).value for col in range(2, 9)]
-    assert ws.cell(25, 2).value == "1주차"
-    assert ws.cell(25, 3).value == "2/2~2/8"
-    assert "|" not in ws.cell(25, 3).value
-    assert ws.cell(25, 4).value == "창세기"
-    assert "부근" not in ws.cell(25, 4).value
-    assert ws.cell(25, 4).alignment.wrap_text is False
-    assert ws.cell(25, 4).alignment.horizontal == "left"
-    assert ws.cell(25, 5).value == 1
-    assert ws.cell(25, 8).value == 1
-    assert ws.cell(26, 2).value == "합"
-    assert ws.cell(26, 5).value == 1
-    assert ws.cell(26, 8).value == 1
+    assert ws.cell(14, 2).value == "0~10%"
+    assert ws.cell(23, 2).value == "90~99%"
+    assert ws.cell(24, 2).value == "100%"
+    assert ws.cell(25, 2).value == "합"
+    assert ws.cell(29, 2).value == "주차"
+    assert ws.cell(29, 3).value == "하차 주"
+    assert ws.cell(29, 4).value == "진행 위치"
+    assert ws.cell(29, 5).value == "성경일독"
+    assert ws.cell(29, 6).value == "신약일독"
+    assert ws.cell(29, 7).value == "투트랙"
+    assert ws.cell(29, 8).value == "합"
+    assert "마지막 인증일" not in [ws.cell(29, col).value for col in range(2, 9)]
+    assert ws.cell(30, 2).value == "1주차"
+    assert ws.cell(30, 3).value == "2/2~2/8"
+    assert "|" not in ws.cell(30, 3).value
+    assert ws.cell(30, 4).value == "창세기"
+    assert "부근" not in ws.cell(30, 4).value
+    assert ws.cell(30, 4).alignment.wrap_text is False
+    assert ws.cell(30, 4).alignment.horizontal == "left"
+    assert ws.cell(30, 5).value == 1
+    assert ws.cell(30, 8).value == 1
+    assert ws.cell(31, 2).value == "합"
+    assert ws.cell(31, 5).value == 1
+    assert ws.cell(31, 8).value == 1
     assert ws.column_dimensions["D"].width >= 40
     assert len(ws._charts) >= 3
     assert type(ws._charts[0]).__name__ == "LineChart"
     assert len(ws._charts[0].series) == 3
+    assert ws._charts[0].anchor == "J11"
+    assert ws._charts[1].anchor == "J29"
