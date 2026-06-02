@@ -619,7 +619,7 @@ class TestBuildOutputXlsx:
         }
         result = build_output_xlsx(users, track_mode="dual")
         wb = load_workbook(io.BytesIO(result))
-        assert len(wb.sheetnames) == 4
+        assert len(wb.sheetnames) == 5
 
     def test_build_output_xlsx__dual_모드__시트_이름(self):
         from openpyxl import load_workbook
@@ -628,7 +628,7 @@ class TestBuildOutputXlsx:
         }
         result = build_output_xlsx(users, track_mode="dual")
         wb = load_workbook(io.BytesIO(result))
-        assert wb.sheetnames == ["구약 진도표", "신약 진도표", "완독자", "분석결과"]
+        assert wb.sheetnames == ["구약 진도표", "신약 진도표", "완독자", "_분석계산", "분석결과"]
 
     def test_build_output_xlsx__dual_모드__트랙_컬럼_없음(self):
         from openpyxl import load_workbook
@@ -765,7 +765,14 @@ class TestBuildOutputXlsx:
 
         ws_analysis = wb["분석결과"]
         assert ws_analysis.cell(2, 2).value == "분석결과"
+        assert ws_analysis.cell(6, 3).value.startswith("=COUNTA(")
         assert len(ws_analysis._charts) >= 3
+
+        ws_helper = wb["_분석계산"]
+        assert ws_helper.sheet_state == "hidden"
+        assert ws_helper.cell(2, 6).value.startswith("=COUNTIF('꿀성경 진도표'!")
+        assert ws_helper.cell(2, 10).value == "=N2"
+        assert ws_helper.cell(2, 13).value == '=IF(H2,"완독",IF(F2=0,"미시작","하차 추정"))'
 
     def test_build_output_xlsx__dual_완독자_시트와_트랙별_강조(self):
         from openpyxl import load_workbook
@@ -812,6 +819,14 @@ class TestBuildOutputXlsx:
         assert ("투트랙", "old_only") not in completion_pairs
         assert ("구약", "old_only") not in completion_pairs
         assert ("신약", "old_only") not in completion_pairs
+
+        ws_analysis = wb["분석결과"]
+        assert ws_analysis.cell(6, 3).value.startswith("=COUNTA(")
+        ws_helper = wb["_분석계산"]
+        assert ws_helper.sheet_state == "hidden"
+        assert "COUNTIF('구약 진도표'!" in ws_helper.cell(2, 6).value
+        assert "COUNTIF('신약 진도표'!" in ws_helper.cell(2, 6).value
+        assert ws_helper.cell(2, 11).value.startswith("=IF(AND(O2=0,R2=0)")
 
 
 class TestMetaSheet:

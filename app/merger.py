@@ -8,7 +8,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from openpyxl import Workbook, load_workbook
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 
-from app.analytics import add_analysis_sheet, build_merged_analysis_records
+from app.analytics import add_formula_analysis_sheet, build_merged_analysis_records
 from app.completion import completion_row, expected_dates, is_complete, normalize_part
 from app.output_builder import sort_dates
 from app.style_constants import COL_PAD, ROW_PAD, apply_sheet_style
@@ -598,7 +598,7 @@ def build_merged_xlsx(bible_users, nt_users, dual_users=None, part=1):
 
     _build_merged_completion_sheet(wb, bible_users, nt_users, dual_users or {}, part=part)
     edu_config = load_education_config()
-    add_analysis_sheet(
+    add_formula_analysis_sheet(
         wb,
         build_merged_analysis_records(
             bible_users,
@@ -607,6 +607,7 @@ def build_merged_xlsx(bible_users, nt_users, dual_users=None, part=1):
             part=part,
             dedupe_names=_education_dedupe_names(edu_config),
         ),
+        part=part,
     )
 
     buf = io.BytesIO()

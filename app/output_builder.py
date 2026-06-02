@@ -6,7 +6,7 @@ import io
 from openpyxl import Workbook
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 
-from app.analytics import add_analysis_sheet, build_output_analysis_records
+from app.analytics import add_formula_analysis_sheet, build_output_analysis_records
 from app.completion import (
     TRACK_LABELS,
     completion_row,
@@ -404,7 +404,7 @@ def build_output_xlsx(users, track_mode="single", meta=None):
         ws_new = wb.create_sheet(title="신약 진도표")
         apply_sheet_style(ws_new, new_headers, new_rows, completed_rows=new_completed_rows)
         _build_completion_sheet(wb, completion_rows)
-        add_analysis_sheet(wb, analysis_records)
+        add_formula_analysis_sheet(wb, analysis_records, part=_completion_part(meta))
     else:
         headers, rows = build_preview_data(users, track_mode)
         completed_rows, completion_rows = _single_completion_data(users, rows, meta)
@@ -412,7 +412,7 @@ def build_output_xlsx(users, track_mode="single", meta=None):
         ws.title = "꿀성경 진도표"
         apply_sheet_style(ws, headers, rows, completed_rows=completed_rows)
         _build_completion_sheet(wb, completion_rows)
-        add_analysis_sheet(wb, analysis_records)
+        add_formula_analysis_sheet(wb, analysis_records, part=_completion_part(meta))
 
     if meta:
         _add_meta_sheet(wb, meta)

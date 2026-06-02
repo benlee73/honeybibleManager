@@ -7,6 +7,7 @@ from statistics import median
 
 from openpyxl.chart import BarChart, LineChart, Reference
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
+from openpyxl.utils.cell import get_column_letter, quote_sheetname
 
 from app.completion import expected_dates, is_complete, normalize_part, single_track_for_user
 from app.schedule import get_part_books
@@ -19,6 +20,7 @@ GROUP_DUAL = "투트랙"
 GROUPS = [GROUP_ALL, GROUP_BIBLE, GROUP_NT, GROUP_DUAL]
 
 PROGRESS_BUCKETS = ["0%", "1~25%", "26~50%", "51~75%", "76~99%", "100%"]
+FORMULA_HELPER_SHEET = "_분석계산"
 
 
 @dataclass(frozen=True)
@@ -41,6 +43,16 @@ class AnalysisRecord:
         if self.expected_count == 0:
             return 0.0
         return min(1.0, self.read_count / self.expected_count)
+
+
+@dataclass(frozen=True)
+class AnalysisSourceRange:
+    sheet_name: str
+    header_row: int
+    row: int
+    date_start_col: int
+    date_end_col: int
+    track: str
 
 
 def _date_key(value):
@@ -389,6 +401,454 @@ def detail_rows(records):
     return rows
 
 
+def _xl_text(value):
+    return '"' + str(value).replace('"', '""') + '"'
+
+
+def _xl_literal(value):
+    if isinstance(value, (int, float)):
+        return str(value)
+    return _xl_text(value)
+
+
+def _cell_addr(row, col):
+    return f"{get_column_letter(col)}{row}"
+
+
+def _range_addr(sheet_name, row, start_col, end_col):
+    sheet = quote_sheetname(sheet_name)
+    start = get_column_letter(start_col)
+    end = get_column_letter(end_col)
+    return f"{sheet}!${start}${row}:${end}${row}"
+
+
+def _helper_range(helper_name, col_letter, start_row, end_row):
+    sheet = quote_sheetname(helper_name)
+    return f"{sheet}!${col_letter}${start_row}:${col_letter}${end_row}"
+
+
+def _is_date_header(value):
+    if value is None:
+        return False
+    month_day = _date_key(value)
+    return month_day != (99, 99)
+
+
+def _track_from_label(value, default_track=None):
+    label = str(value or "").strip()
+    if label in ("구약", "투트랙(구약)"):
+        return "old"
+    if label in ("신약", "투트랙(신약)"):
+        return "new"
+    if label == "신약일독":
+        return "nt"
+    if label == "성경일독":
+        return "bible"
+    return default_track
+
+
+def _find_progress_layout(ws):
+    """진도표 시트에서 헤더 행과 주요 컬럼 위치를 찾는다."""
+    for row in range(1, min(ws.max_row, 12) + 1):
+        values = [ws.cell(row, col).value for col in range(1, ws.max_column + 1)]
+        if "이름" not in values:
+            continue
+        name_col = values.index("이름") + 1
+        track_col = values.index("트랙") + 1 if "트랙" in values else None
+        date_cols = [
+            col
+            for col in range(1, ws.max_column + 1)
+            if _is_date_header(ws.cell(row, col).value)
+        ]
+        return {
+            "header_row": row,
+            "name_col": name_col,
+            "track_col": track_col,
+            "date_start_col": min(date_cols) if date_cols else 0,
+            "date_end_col": max(date_cols) if date_cols else 0,
+        }
+    return None
+
+
+def _source_rows_for_sheet(wb, sheet_name, default_track=None):
+    if sheet_name not in wb.sheetnames:
+        return []
+
+    ws = wb[sheet_name]
+    layout = _find_progress_layout(ws)
+    if not layout:
+        return []
+
+    rows = []
+    for row in range(layout["header_row"] + 1, ws.max_row + 1):
+        name = ws.cell(row, layout["name_col"]).value
+        if not name:
+            continue
+        track = default_track
+        if layout["track_col"]:
+            track = _track_from_label(ws.cell(row, layout["track_col"]).value, default_track)
+        rows.append((
+            str(name),
+            track,
+            AnalysisSourceRange(
+                sheet_name=sheet_name,
+                header_row=layout["header_row"],
+                row=row,
+                date_start_col=layout["date_start_col"],
+                date_end_col=layout["date_end_col"],
+                track=track or "",
+            ),
+        ))
+    return rows
+
+
+def _discover_analysis_sources(wb, records):
+    """분석 레코드별로 참조할 진도표 행 범위를 찾는다."""
+    bible_sources = {
+        name: source for name, _, source in _source_rows_for_sheet(wb, "성경일독 진도표", "bible")
+    }
+    nt_sources = {
+        name: source for name, _, source in _source_rows_for_sheet(wb, "신약일독 진도표", "nt")
+    }
+    single_sources = {
+        name: source for name, _, source in _source_rows_for_sheet(wb, "꿀성경 진도표")
+    }
+
+    dual_sources = {}
+    for name, track, source in _source_rows_for_sheet(wb, "투트랙 진도표"):
+        dual_sources.setdefault(name, {})[track] = source
+    for name, _, source in _source_rows_for_sheet(wb, "구약 진도표", "old"):
+        dual_sources.setdefault(name, {})["old"] = source
+    for name, _, source in _source_rows_for_sheet(wb, "신약 진도표", "new"):
+        dual_sources.setdefault(name, {})["new"] = source
+
+    result = []
+    for record in records:
+        if record.group == GROUP_DUAL:
+            by_track = dual_sources.get(record.name, {})
+            sources = [by_track[track] for track in ("old", "new") if track in by_track]
+        elif record.group == GROUP_NT:
+            source = nt_sources.get(record.name) or single_sources.get(record.name)
+            sources = [source] if source else []
+            if sources and not sources[0].track:
+                sources = [AnalysisSourceRange(
+                    sources[0].sheet_name,
+                    sources[0].header_row,
+                    sources[0].row,
+                    sources[0].date_start_col,
+                    sources[0].date_end_col,
+                    "nt",
+                )]
+        else:
+            source = bible_sources.get(record.name) or single_sources.get(record.name)
+            sources = [source] if source else []
+            if sources and not sources[0].track:
+                sources = [AnalysisSourceRange(
+                    sources[0].sheet_name,
+                    sources[0].header_row,
+                    sources[0].row,
+                    sources[0].date_start_col,
+                    sources[0].date_end_col,
+                    "bible",
+                )]
+        result.append(sources)
+    return result
+
+
+def _source_count_formula(source):
+    if not source or not source.date_start_col or source.date_start_col > source.date_end_col:
+        return "0"
+    data_range = _range_addr(source.sheet_name, source.row, source.date_start_col, source.date_end_col)
+    return f'COUNTIF({data_range},"O")'
+
+
+def _source_last_formula(source):
+    if not source or not source.date_start_col or source.date_start_col > source.date_end_col:
+        return '""'
+    data_range = _range_addr(source.sheet_name, source.row, source.date_start_col, source.date_end_col)
+    header_range = _range_addr(source.sheet_name, source.header_row, source.date_start_col, source.date_end_col)
+    return f'IFERROR(LOOKUP(2,1/({data_range}="O"),{header_range}),"")'
+
+
+def _map_lookup_formula(date_cell, track, map_end_row, value_col, default_value):
+    if not track:
+        return _xl_literal(default_value)
+    key_range = f"$AB$2:$AB${map_end_row}"
+    value_range = f"${value_col}$2:${value_col}${map_end_row}"
+    key = f"{_xl_text(track + '|')}&{date_cell}"
+    default = _xl_literal(default_value)
+    return f"IF({date_cell}=\"\",{default},IFERROR(INDEX({value_range},MATCH({key},{key_range},0)),{default}))"
+
+
+def _record_tracks(records):
+    tracks = set()
+    for record in records:
+        if record.group == GROUP_DUAL:
+            tracks.update(("old", "new"))
+        elif record.group == GROUP_NT:
+            tracks.add("nt")
+        else:
+            tracks.add("bible")
+    return tracks
+
+
+def _date_order(value):
+    month, day = _date_key(value)
+    if month == 99:
+        return 0
+    return month * 100 + day
+
+
+def _write_date_map(ws, records, part):
+    headers = ["매핑ID", "키", "트랙", "날짜", "주", "진행 위치", "정렬값"]
+    start_col = 27  # AA
+    for offset, header in enumerate(headers):
+        ws.cell(1, start_col + offset, header)
+
+    row = 2
+    track_order = {"bible": 0, "nt": 1, "old": 2, "new": 3}
+    for track in sorted(_record_tracks(records), key=lambda value: track_order.get(value, 99)):
+        for date_value in _sort_dates(expected_dates(track, part)):
+            _, week_label = _week_bucket(date_value)
+            ws.cell(row, start_col, row - 1)
+            ws.cell(row, start_col + 1, f"{track}|{date_value}")
+            ws.cell(row, start_col + 2, track)
+            ws.cell(row, start_col + 3, date_value)
+            ws.cell(row, start_col + 4, week_label)
+            ws.cell(row, start_col + 5, _position_for_date(date_value, track, part))
+            ws.cell(row, start_col + 6, _date_order(date_value))
+            row += 1
+    return max(2, row - 1)
+
+
+def _add_formula_helper_sheet(wb, records, source_groups, part):
+    if FORMULA_HELPER_SHEET in wb.sheetnames:
+        del wb[FORMULA_HELPER_SHEET]
+    ws = wb.create_sheet(title=FORMULA_HELPER_SHEET)
+    ws.sheet_state = "hidden"
+
+    headers = [
+        "ID", "그룹", "담당", "이름", "이모티콘", "인증일수", "전체일수", "완독",
+        "진행률", "마지막 인증일", "마지막 트랙", "마지막 위치", "상태",
+        "소스1 마지막일", "소스1 정렬값", "소스1 위치",
+        "소스2 마지막일", "소스2 정렬값", "소스2 위치", "마지막 주",
+    ]
+    for col, header in enumerate(headers, start=1):
+        ws.cell(1, col, header)
+
+    map_end_row = _write_date_map(ws, records, part)
+
+    for index, (record, sources) in enumerate(zip(records, source_groups), start=2):
+        ordered_sources = sorted(sources, key=lambda source: {"old": 0, "new": 1}.get(source.track, 0))
+        source1 = ordered_sources[0] if ordered_sources else None
+        source2 = ordered_sources[1] if len(ordered_sources) > 1 else None
+
+        ws.cell(index, 1, index - 1)
+        ws.cell(index, 2, record.group)
+        ws.cell(index, 3, record.leader)
+        ws.cell(index, 4, record.name)
+        ws.cell(index, 5, record.emoji)
+        ws.cell(index, 6, "=" + "+".join(_source_count_formula(source) for source in ordered_sources) if ordered_sources else "=0")
+        ws.cell(index, 7, record.expected_count)
+        ws.cell(index, 8, f"=AND(G{index}>0,F{index}>=G{index})")
+        ws.cell(index, 9, f"=IF(G{index}=0,0,MIN(1,F{index}/G{index}))")
+
+        ws.cell(index, 14, "=" + _source_last_formula(source1))
+        ws.cell(index, 15, "=" + _map_lookup_formula(f"N{index}", source1.track if source1 else "", map_end_row, "AG", 0))
+        ws.cell(index, 16, "=" + _map_lookup_formula(f"N{index}", source1.track if source1 else "", map_end_row, "AF", "진도 미확인"))
+        ws.cell(index, 17, "=" + _source_last_formula(source2))
+        ws.cell(index, 18, "=" + _map_lookup_formula(f"Q{index}", source2.track if source2 else "", map_end_row, "AG", 0))
+        ws.cell(index, 19, "=" + _map_lookup_formula(f"Q{index}", source2.track if source2 else "", map_end_row, "AF", "진도 미확인"))
+
+        if record.group == GROUP_DUAL:
+            ws.cell(index, 10, f'=IF(AND(O{index}=0,R{index}=0),"",IF(R{index}>O{index},Q{index},N{index}))')
+            ws.cell(index, 11, (
+                f'=IF(AND(O{index}=0,R{index}=0),"",'
+                f'IF(AND(O{index}=R{index},O{index}>0),"구약/신약",'
+                f'IF(R{index}>O{index},"신약","구약")))'
+            ))
+            ws.cell(index, 12, (
+                f'=IF(J{index}="","미시작",'
+                f'IF(AND(O{index}=R{index},O{index}>0),"구약: "&P{index}&" / 신약: "&S{index},'
+                f'IF(R{index}>O{index},S{index},P{index})))'
+            ))
+        else:
+            ws.cell(index, 10, f"=N{index}")
+            ws.cell(index, 11, f'=IF(J{index}="","",B{index})')
+            ws.cell(index, 12, f'=IF(J{index}="","미시작",P{index})')
+
+        ws.cell(index, 13, f'=IF(H{index},"완독",IF(F{index}=0,"미시작","하차 추정"))')
+        ws.cell(index, 20, (
+            f'=IF(J{index}="","",IFERROR(INDEX($AE$2:$AE${map_end_row},'
+            f'MATCH(IF(K{index}="신약","new",IF(K{index}="신약일독","nt",'
+            f'IF(K{index}="성경일독","bible","old")))&"|"&J{index},'
+            f'$AB$2:$AB${map_end_row},0)),"미확인"))'
+        ))
+
+    for col in range(1, 21):
+        ws.column_dimensions[get_column_letter(col)].width = 14
+    for col in range(27, 34):
+        ws.column_dimensions[get_column_letter(col)].width = 16
+
+    return {
+        "name": FORMULA_HELPER_SHEET,
+        "first_row": 2,
+        "last_row": max(1, len(records) + 1),
+        "map_end_row": map_end_row,
+    }
+
+
+def _summary_formula_rows(records, helper_info, start_row, start_col):
+    helper = helper_info["name"]
+    first = helper_info["first_row"]
+    last = helper_info["last_row"]
+    if not records:
+        return [[group, "=0", "=0", "=0", "=0", "=0", "=0", "=0"] for group in GROUPS]
+
+    group_range = _helper_range(helper, "B", first, last)
+    name_range = _helper_range(helper, "D", first, last)
+    complete_range = _helper_range(helper, "H", first, last)
+    progress_range = _helper_range(helper, "I", first, last)
+    status_range = _helper_range(helper, "M", first, last)
+
+    rows = []
+    for offset, group in enumerate(GROUPS, start=1):
+        excel_row = start_row + offset
+        total_cell = _cell_addr(excel_row, start_col + 1)
+        complete_cell = _cell_addr(excel_row, start_col + 2)
+        if group == GROUP_ALL:
+            total = f"=COUNTA({name_range})"
+            complete = f"=COUNTIF({complete_range},TRUE)"
+            avg = f"=IF({total_cell}=0,0,AVERAGE({progress_range}))"
+            med = f"=IF({total_cell}=0,0,MEDIAN({progress_range}))"
+            not_started = f'=COUNTIF({status_range},"미시작")'
+            dropout = f'=COUNTIF({status_range},"하차 추정")'
+        else:
+            group_text = _xl_text(group)
+            total = f"=COUNTIF({group_range},{group_text})"
+            complete = f"=COUNTIFS({group_range},{group_text},{complete_range},TRUE)"
+            avg = f"=IF({total_cell}=0,0,AVERAGEIF({group_range},{group_text},{progress_range}))"
+            med = f"=IF({total_cell}=0,0,MEDIAN(FILTER({progress_range},{group_range}={group_text})))"
+            not_started = f'=COUNTIFS({group_range},{group_text},{status_range},"미시작")'
+            dropout = f'=COUNTIFS({group_range},{group_text},{status_range},"하차 추정")'
+        rate = f"=IF({total_cell}=0,0,{complete_cell}/{total_cell})"
+        rows.append([group, total, complete, rate, avg, med, not_started, dropout])
+    return rows
+
+
+def _progress_bucket_formula(helper_info, bucket, group):
+    helper = helper_info["name"]
+    first = helper_info["first_row"]
+    last = helper_info["last_row"]
+    if last < first:
+        return "=0"
+    group_range = _helper_range(helper, "B", first, last)
+    progress_range = _helper_range(helper, "I", first, last)
+    criteria = {
+        "0%": [(progress_range, "<=0")],
+        "1~25%": [(progress_range, ">0"), (progress_range, "<=0.25")],
+        "26~50%": [(progress_range, ">0.25"), (progress_range, "<=0.5")],
+        "51~75%": [(progress_range, ">0.5"), (progress_range, "<=0.75")],
+        "76~99%": [(progress_range, ">0.75"), (progress_range, "<1")],
+        "100%": [(progress_range, ">=1")],
+    }[bucket]
+    parts = []
+    if group != GROUP_ALL:
+        parts.extend([group_range, _xl_text(group)])
+    for criteria_range, value in criteria:
+        parts.extend([criteria_range, _xl_text(value)])
+    return f"=COUNTIFS({','.join(parts)})"
+
+
+def _formula_dropout_rows(records, helper_info, start_row, start_col):
+    dropout_rows_data = dropout_distribution(records)
+    if not dropout_rows_data:
+        return [["-", "", "하차 추정 없음", "=0", ""]]
+
+    helper = helper_info["name"]
+    first = helper_info["first_row"]
+    last = helper_info["last_row"]
+    status_range = _helper_range(helper, "M", first, last)
+    last_date_range = _helper_range(helper, "J", first, last)
+    position_range = _helper_range(helper, "L", first, last)
+    name_range = _helper_range(helper, "D", first, last)
+    week_range = _helper_range(helper, "T", first, last)
+
+    rows = []
+    for offset, item in enumerate(dropout_rows_data, start=1):
+        excel_row = start_row + offset
+        week_cell = _cell_addr(excel_row, start_col)
+        position_cell = _cell_addr(excel_row, start_col + 2)
+        count_cell = _cell_addr(excel_row, start_col + 3)
+        count_formula = (
+            f'=COUNTIFS({status_range},"하차 추정",{week_range},{week_cell},'
+            f'{position_range},{position_cell})'
+        )
+        date_formula = (
+            f'=IF({count_cell}=0,"",TEXTJOIN(", ",TRUE,IF(({status_range}="하차 추정")*'
+            f'({week_range}={week_cell})*({position_range}={position_cell}),{last_date_range},"")))'
+        )
+        names_formula = (
+            f'=IF({count_cell}=0,"",TEXTJOIN(", ",TRUE,IF(({status_range}="하차 추정")*'
+            f'({week_range}={week_cell})*({position_range}={position_cell}),{name_range},"")))'
+        )
+        rows.append([item["week"], date_formula, item["position"], count_formula, names_formula])
+    return rows
+
+
+def _source_has_date_formula(source, date_value):
+    if not source or not source.date_start_col or source.date_start_col > source.date_end_col:
+        return "0"
+    data_range = _range_addr(source.sheet_name, source.row, source.date_start_col, source.date_end_col)
+    header_range = _range_addr(source.sheet_name, source.header_row, source.date_start_col, source.date_end_col)
+    return f'COUNTIFS({header_range},{_xl_text(date_value)},{data_range},"O")'
+
+
+def _trend_dates_from_sources(wb, source_groups):
+    dates = set()
+    for sources in source_groups:
+        for source in sources:
+            if not source.date_start_col or source.date_start_col > source.date_end_col:
+                continue
+            ws = wb[source.sheet_name]
+            for col in range(source.date_start_col, source.date_end_col + 1):
+                value = ws.cell(source.header_row, col).value
+                if _is_date_header(value):
+                    dates.add(str(value))
+    return _sort_dates(dates)
+
+
+def _trend_count_formula(source_groups, date_value):
+    terms = []
+    for sources in source_groups:
+        source_terms = [_source_has_date_formula(source, date_value) for source in sources]
+        source_sum = "+".join(source_terms) if source_terms else "0"
+        terms.append(f"--(({source_sum})>0)")
+    if not terms:
+        return "=0"
+    return f"=SUM({','.join(terms)})"
+
+
+def _formula_detail_rows(records, helper_info):
+    helper = quote_sheetname(helper_info["name"])
+    rows = []
+    for idx, _ in enumerate(records, start=helper_info["first_row"]):
+        rows.append([
+            f"={helper}!B{idx}",
+            f"={helper}!C{idx}",
+            f"={helper}!D{idx}",
+            f"={helper}!E{idx}",
+            f"={helper}!I{idx}",
+            f"={helper}!F{idx}",
+            f"={helper}!G{idx}",
+            f"={helper}!J{idx}",
+            f"={helper}!K{idx}",
+            f"={helper}!L{idx}",
+            f"={helper}!M{idx}",
+        ])
+    return rows
+
+
 def _visual_width(value):
     """한글이 많은 셀의 대략적인 표시 폭을 계산한다."""
     text = "" if value is None else str(value)
@@ -604,6 +1064,136 @@ def add_analysis_sheet(wb, records):
         col,
         detail_headers,
         detail_rows(records),
+        percent_cols={4},
+        wrap_cols={1, 2, 9},
+        left_cols={1, 2, 9},
+    )
+
+    ws.freeze_panes = "B3"
+    return ws
+
+
+def add_formula_analysis_sheet(wb, records, part=1):
+    """Workbook에 진도표를 참조하는 수식 기반 분석결과 시트를 추가한다."""
+    source_groups = _discover_analysis_sources(wb, records)
+    helper_info = _add_formula_helper_sheet(wb, records, source_groups, normalize_part(part))
+
+    ws = wb.create_sheet(title="분석결과")
+    _set_widths(ws)
+
+    # 파일을 열 때 Excel/Sheets가 helper 수식을 다시 계산하도록 힌트를 남긴다.
+    wb.calculation.fullCalcOnLoad = True
+    wb.calculation.forceFullCalc = True
+    wb.calculation.calcMode = "auto"
+
+    R = ROW_PAD
+    C = COL_PAD
+    row = 1 + R
+    col = 1 + C
+
+    ws.merge_cells(start_row=row, start_column=col, end_row=row, end_column=col + 10)
+    title_cell = ws.cell(row, col, "분석결과")
+    title_cell.font = Font(name="맑은 고딕", size=20)
+    title_cell.fill = PatternFill(start_color="D6E4F0", end_color="D6E4F0", fill_type="solid")
+    title_cell.alignment = Alignment(horizontal="center", vertical="center")
+    ws.row_dimensions[row].height = 42
+
+    row += 2
+    _section_title(ws, row, col, "요약")
+    summary_headers = ["그룹", "전체 인원", "완독자", "완독률", "평균 진행률", "중앙 진행률", "미시작", "하차 추정"]
+    summary_table_row = row + 1
+    summary_rows = _summary_formula_rows(records, helper_info, summary_table_row, col)
+    _style_table(ws, summary_table_row, col, summary_headers, summary_rows, percent_cols={3, 4, 5})
+
+    row += len(summary_rows) + 4
+    _section_title(ws, row, col, "진행률 구간 분포")
+    dist_headers = ["구간"] + GROUPS
+    dist_rows = [
+        [bucket] + [_progress_bucket_formula(helper_info, bucket, group) for group in GROUPS]
+        for bucket in PROGRESS_BUCKETS
+    ]
+    dist_table_row = row + 1
+    _style_table(ws, dist_table_row, col, dist_headers, dist_rows)
+
+    chart = BarChart()
+    chart.title = "진행률 구간 분포"
+    chart.y_axis.title = "인원"
+    chart.x_axis.title = "진행률"
+    data = Reference(ws, min_col=col + 1, max_col=col + len(GROUPS),
+                     min_row=dist_table_row, max_row=dist_table_row + len(dist_rows))
+    categories = Reference(ws, min_col=col, min_row=dist_table_row + 1,
+                           max_row=dist_table_row + len(dist_rows))
+    chart.add_data(data, titles_from_data=True)
+    chart.set_categories(categories)
+    chart.height = 7
+    chart.width = 16
+    ws.add_chart(chart, "H11")
+
+    row += len(dist_rows) + 4
+    _section_title(ws, row, col, "하차 추정 분포")
+    dropout_headers = ["하차 주", "마지막 인증일", "진행 위치", "하차 추정 인원", "이름"]
+    dropout_table_row = row + 1
+    dropout_rows = _formula_dropout_rows(records, helper_info, dropout_table_row, col)
+    _style_table(
+        ws,
+        dropout_table_row,
+        col,
+        dropout_headers,
+        dropout_rows,
+        wrap_cols={1, 2, 4},
+        left_cols={2, 4},
+    )
+
+    chart = BarChart()
+    chart.title = "하차 추정 분포"
+    chart.y_axis.title = "인원"
+    chart.x_axis.title = "하차 주"
+    data = Reference(ws, min_col=col + 3, min_row=dropout_table_row,
+                     max_row=dropout_table_row + len(dropout_rows))
+    categories = Reference(ws, min_col=col, min_row=dropout_table_row + 1,
+                           max_row=dropout_table_row + len(dropout_rows))
+    chart.add_data(data, titles_from_data=True)
+    chart.set_categories(categories)
+    chart.height = 7
+    chart.width = 16
+    ws.add_chart(chart, "H25")
+
+    row += len(dropout_rows) + 4
+    _section_title(ws, row, col, "날짜별 인증 인원 추이")
+    trend_headers = ["날짜", "인증 인원"]
+    trend_dates = _trend_dates_from_sources(wb, source_groups)
+    trend_rows = [[date_value, _trend_count_formula(source_groups, date_value)] for date_value in trend_dates]
+    if not trend_rows:
+        trend_rows = [["-", "=0"]]
+    trend_table_row = row + 1
+    _style_table(ws, trend_table_row, col, trend_headers, trend_rows)
+
+    chart = LineChart()
+    chart.title = "날짜별 인증 인원 추이"
+    chart.y_axis.title = "인원"
+    chart.x_axis.title = "날짜"
+    data = Reference(ws, min_col=col + 1, min_row=trend_table_row,
+                     max_row=trend_table_row + len(trend_rows))
+    categories = Reference(ws, min_col=col, min_row=trend_table_row + 1,
+                           max_row=trend_table_row + len(trend_rows))
+    chart.add_data(data, titles_from_data=True)
+    chart.set_categories(categories)
+    chart.height = 7
+    chart.width = 16
+    ws.add_chart(chart, "H39")
+
+    row += len(trend_rows) + 4
+    _section_title(ws, row, col, "상세 명단")
+    detail_headers = [
+        "그룹", "담당", "이름", "이모티콘", "진행률", "인증일수", "전체일수",
+        "마지막 인증일", "마지막 트랙", "마지막 위치", "상태",
+    ]
+    _style_table(
+        ws,
+        row + 1,
+        col,
+        detail_headers,
+        _formula_detail_rows(records, helper_info),
         percent_cols={4},
         wrap_cols={1, 2, 9},
         left_cols={1, 2, 9},

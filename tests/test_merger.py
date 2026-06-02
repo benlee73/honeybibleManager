@@ -385,7 +385,14 @@ class TestBuildMergedXlsx:
         # row 5 = 요약 헤더, row 6 = 전체 요약. 김태환은 방장이라 1명,
         # 김치훈은 room_members의 일반 참여자라 2명, 동명이인도 2명으로 유지된다.
         assert ws.cell(6, 2).value == "전체"
-        assert ws.cell(6, 3).value == 5
+        assert ws.cell(6, 3).value.startswith("=COUNTA(")
+
+        ws_helper = wb["_분석계산"]
+        assert ws_helper.sheet_state == "hidden"
+        names = [ws_helper.cell(row, 4).value for row in range(2, ws_helper.max_row + 1)]
+        assert names.count("김태환") == 1
+        assert names.count("김치훈") == 2
+        assert names.count("동명이인") == 2
 
 
 class TestBuildMergedPreview:
@@ -449,7 +456,7 @@ class TestBuildMergedXlsxDualUsers:
         xlsx_bytes = build_merged_xlsx({}, {}, dual_users={})
         wb = load_workbook(io.BytesIO(xlsx_bytes))
 
-        assert len(wb.sheetnames) == 4
+        assert len(wb.sheetnames) == 5
         assert "투트랙 진도표" not in wb.sheetnames
 
     def test_투트랙_시트_구약_신약_행_분리(self):
