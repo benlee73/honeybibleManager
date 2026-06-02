@@ -624,6 +624,15 @@ def _record_tracks(records):
     return tracks
 
 
+def _dropout_candidate_weeks(records, part):
+    weeks = {}
+    for track in _record_tracks(records):
+        for date_value in expected_dates(track, part):
+            week_start, week_label = _week_bucket(date_value)
+            weeks[week_start] = week_label
+    return [weeks[key] for key in sorted(weeks)]
+
+
 def _date_order(value):
     month, day = _date_key(value)
     if month == 99:
@@ -727,6 +736,7 @@ def _add_formula_helper_sheet(wb, records, source_groups, part):
         "first_row": 2,
         "last_row": max(1, len(records) + 1),
         "map_end_row": map_end_row,
+        "dropout_weeks": _dropout_candidate_weeks(records, part),
     }
 
 
@@ -793,8 +803,8 @@ def _progress_bucket_formula(helper_info, bucket, group):
 
 
 def _formula_dropout_rows(records, helper_info, start_row, start_col):
-    dropout_rows_data = dropout_week_distribution(records)
-    if not dropout_rows_data:
+    candidate_weeks = helper_info.get("dropout_weeks", [])
+    if not candidate_weeks:
         return [["-", "", "하차 추정 없음", ""]], [], 1
 
     helper = helper_info["name"]
@@ -807,7 +817,7 @@ def _formula_dropout_rows(records, helper_info, start_row, start_col):
 
     criteria_col = start_col + 11
     raw_rows = []
-    for offset, item in enumerate(dropout_rows_data, start=1):
+    for offset, week_label in enumerate(candidate_weeks, start=1):
         excel_row = start_row + offset
         criteria_cell = _cell_addr(excel_row, criteria_col)
         raw_count_cell = _cell_addr(excel_row, criteria_col + 3)
@@ -821,7 +831,7 @@ def _formula_dropout_rows(records, helper_info, start_row, start_col):
             f'=IF({raw_count_cell}="","",TEXTJOIN(" / ",TRUE,UNIQUE(FILTER('
             f'{position_range},({status_range}="하차 추정")*({week_range}={criteria_cell})))))'
         )
-        raw_rows.append([item["week"], date_formula, position_formula, count_formula])
+        raw_rows.append([week_label, date_formula, position_formula, count_formula])
 
     raw_start = _cell_addr(start_row + 1, criteria_col)
     raw_end = _cell_addr(start_row + len(raw_rows), criteria_col + 3)

@@ -772,6 +772,7 @@ class TestBuildOutputXlsx:
         assert ws_analysis.cell(24, 3).value is None
         assert ws_analysis.cell(24, 5).value is None
         assert ws_analysis.cell(24, 13).value == "2/2~2/8"
+        assert ws_analysis.cell(25, 13).value == "2/9~2/15"
         assert ws_analysis.cell(24, 14).value.startswith("=IF(P24=\"\",\"\",TEXTJOIN(")
         assert ws_analysis.cell(24, 16).value.startswith("=IF(COUNTIFS(")
         assert ws_analysis.column_dimensions["M"].hidden is True
