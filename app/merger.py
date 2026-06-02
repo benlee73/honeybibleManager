@@ -1,3 +1,4 @@
+import datetime
 import io
 import json
 import os
@@ -142,6 +143,25 @@ def _find_header_row(ws):
     return iter([]), None, 0
 
 
+def _normalize_date_header(value):
+    """XLSX 날짜 헤더를 내부 M/D 문자열로 정규화한다."""
+    if value is None:
+        return None
+    if isinstance(value, datetime.datetime):
+        return f"{value.month}/{value.day}"
+    if isinstance(value, datetime.date):
+        return f"{value.month}/{value.day}"
+
+    text = str(value).strip()
+    m = re.match(r"^\d{4}[-/](\d{1,2})[-/](\d{1,2})(?:\s+.*)?$", text)
+    if m:
+        return f"{int(m.group(1))}/{int(m.group(2))}"
+    m = re.match(r"^(\d{1,2})/(\d{1,2})(?:\s+.*)?$", text)
+    if m:
+        return f"{int(m.group(1))}/{int(m.group(2))}"
+    return text
+
+
 def read_users_from_xlsx(xlsx_bytes, track_mode):
     """XLSX 바이트에서 사용자 데이터를 추출한다.
 
@@ -166,7 +186,7 @@ def read_users_from_xlsx(xlsx_bytes, track_mode):
                 if not header:
                     continue
                 # 날짜 컬럼: "이름", "이모티콘" 뒤부터
-                date_cols = list(header[2:])
+                date_cols = [_normalize_date_header(value) for value in header[2:]]
                 for row in rows_iter:
                     if not row or col_offset >= len(row) or not row[col_offset]:
                         continue
@@ -179,7 +199,7 @@ def read_users_from_xlsx(xlsx_bytes, track_mode):
                         cell_idx = col_offset + 2 + i
                         cell_val = row[cell_idx] if cell_idx < len(row) else None
                         if cell_val == "O" and date_val:
-                            entry[date_key].add(str(date_val))
+                            entry[date_key].add(date_val)
         else:
             sheet_name = "꿀성경 진도표"
             if sheet_name not in wb.sheetnames:
@@ -188,7 +208,7 @@ def read_users_from_xlsx(xlsx_bytes, track_mode):
             ws = wb[sheet_name]
             rows_iter, header, col_offset = _find_header_row(ws)
             if header:
-                date_cols = list(header[2:])
+                date_cols = [_normalize_date_header(value) for value in header[2:]]
                 for row in rows_iter:
                     if not row or col_offset >= len(row) or not row[col_offset]:
                         continue
@@ -201,7 +221,7 @@ def read_users_from_xlsx(xlsx_bytes, track_mode):
                         cell_idx = col_offset + 2 + i
                         cell_val = row[cell_idx] if cell_idx < len(row) else None
                         if cell_val == "O" and date_val:
-                            entry["dates"].add(str(date_val))
+                            entry["dates"].add(date_val)
 
         return users
     finally:
@@ -662,18 +682,15 @@ def _build_merged_completion_sheet(wb, bible_users, nt_users, dual_users, part=1
         if new_row:
             rows.append(new_row)
         if old_complete and new_complete:
-            total_count = len(bible_expected) + len(nt_expected)
             rows.append([
                 data.get("leader", ""),
                 "투트랙(둘 다)",
                 user,
                 data.get("emoji", ""),
-                total_count,
-                total_count,
             ])
 
     rows.sort(key=lambda row: (row[0], row[2], row[1]))
-    headers = ["담당", "트랙", "이름", "이모티콘", "완독일수", "전체일수"]
+    headers = ["담당", "트랙", "이름", "이모티콘"]
     ws = wb.create_sheet(title="완독자")
     apply_sheet_style(ws, headers, rows, leader_col=1, completed_rows=range(len(rows)))
     _apply_leader_merge(ws, rows, title=None)

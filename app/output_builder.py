@@ -136,7 +136,7 @@ def apply_sheet_style(ws, headers, rows, leader_col=None, title=None, completed_
     mark_font = Font(name="맑은 고딕", size=11)
     center_align = Alignment(horizontal="center", vertical="center")
     name_fill = PatternFill(start_color="EBF1F8", end_color="EBF1F8", fill_type="solid")
-    completed_name_fill = PatternFill(start_color="D9EAD3", end_color="D9EAD3", fill_type="solid")
+    completed_row_fill = PatternFill(start_color="CFE2F3", end_color="CFE2F3", fill_type="solid")
     completed_row_offsets = set(completed_rows or [])
 
     thin = Side(style="thin")
@@ -148,7 +148,7 @@ def apply_sheet_style(ws, headers, rows, leader_col=None, title=None, completed_
     last_col = len(headers) + C
 
     name_col = (headers.index("이름") + 1 + C) if "이름" in headers else first_col
-    _NON_DATE = {"이름", "이모티콘", "담당", "트랙", "완독일수", "전체일수"}
+    _NON_DATE = {"이름", "이모티콘", "담당", "트랙"}
     date_start_col = sum(1 for h in headers if h in _NON_DATE) + 1 + C
     leader_col_ws = (leader_col + C) if leader_col else None
 
@@ -211,13 +211,16 @@ def apply_sheet_style(ws, headers, rows, leader_col=None, title=None, completed_
     # 데이터 행
     for row_offset, row_data in enumerate(rows):
         row_idx = data_start + row_offset
+        is_completed_row = row_offset in completed_row_offsets
         for col_idx, value in enumerate(row_data, start=first_col):
             cell = ws.cell(row=row_idx, column=col_idx, value=value)
             cell.font = mark_font if value == "O" else body_font
             cell.alignment = center_align
-            if col_idx == name_col:
-                cell.fill = completed_name_fill if row_offset in completed_row_offsets else name_fill
-            elif leader_col_ws and col_idx == leader_col_ws:
+            if leader_col_ws and col_idx == leader_col_ws:
+                cell.fill = name_fill
+            elif is_completed_row:
+                cell.fill = completed_row_fill
+            elif col_idx == name_col:
                 cell.fill = name_fill
 
     # 풀 그리드 테두리
@@ -245,8 +248,6 @@ def apply_sheet_style(ws, headers, rows, leader_col=None, title=None, completed_
             ws.column_dimensions[col_letter].width = 10
         elif header == "트랙":
             ws.column_dimensions[col_letter].width = 14
-        elif header in ("완독일수", "전체일수"):
-            ws.column_dimensions[col_letter].width = 10
         else:
             ws.column_dimensions[col_letter].width = 7
 
@@ -301,7 +302,7 @@ def _completion_part(meta):
 
 def _build_completion_sheet(wb, rows):
     """완독자 리스트 시트를 추가한다."""
-    headers = ["트랙", "이름", "이모티콘", "완독일수", "전체일수"]
+    headers = ["트랙", "이름", "이모티콘"]
     ws = wb.create_sheet(title="완독자")
     apply_sheet_style(ws, headers, rows, completed_rows=range(len(rows)))
 
@@ -372,8 +373,7 @@ def _dual_completion_data(users, old_rows, new_rows, meta):
         if new_row:
             completion_rows.append(new_row)
         if old_complete and new_complete:
-            total_count = len(old_expected) + len(new_expected)
-            completion_rows.append(["둘 다", user, data.get("emoji", ""), total_count, total_count])
+            completion_rows.append(["둘 다", user, data.get("emoji", "")])
 
     return old_completed_rows, new_completed_rows, completion_rows
 

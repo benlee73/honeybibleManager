@@ -1,3 +1,4 @@
+import datetime
 import io
 import json
 import os
@@ -176,6 +177,25 @@ class TestReadUsersFromXlsx:
         result = read_users_from_xlsx(xlsx_bytes, "single")
         assert result == {}
 
+    def test_날짜형_헤더__월일_문자열로_정규화(self):
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "꿀성경 진도표"
+        ws.cell(2, 2, "이름")
+        ws.cell(2, 3, "이모티콘")
+        ws.cell(2, 4, datetime.datetime(2026, 2, 2))
+        ws.cell(2, 5, "2026-02-03 00:00:00")
+        ws.cell(3, 2, "user1")
+        ws.cell(3, 3, "😀")
+        ws.cell(3, 4, "O")
+        ws.cell(3, 5, "O")
+
+        buf = io.BytesIO()
+        wb.save(buf)
+
+        result = read_users_from_xlsx(buf.getvalue(), "single")
+        assert result["user1"]["dates"] == {"2/2", "2/3"}
+
 
 class TestClassifyEducationUsers:
     def test_정상_분류(self):
@@ -305,7 +325,7 @@ class TestBuildMergedXlsx:
         bottom_cell = ws.cell(6, leader_col)
         assert bottom_cell.border.bottom.style == "medium"
 
-    def test_완독자_시트와_이름셀_강조(self):
+    def test_완독자_시트와_행_강조(self):
         bible_users = {
             "complete": {"dates": set(BIBLE_PART_DATES[0]), "emoji": "😀", "leader": "방장A"},
             "partial": {"dates": {"2/2"}, "emoji": "🔥", "leader": "방장A"},
@@ -319,11 +339,16 @@ class TestBuildMergedXlsx:
 
         ws_bible = wb["성경일독 진도표"]
         assert ws_bible.cell(5, 3).value == "complete"
-        assert ws_bible.cell(5, 3).fill.start_color.rgb == "00D9EAD3"
+        assert ws_bible.cell(5, 2).fill.start_color.rgb == "00EBF1F8"
+        assert ws_bible.cell(5, 3).fill.start_color.rgb == "00CFE2F3"
+        assert ws_bible.cell(5, 4).fill.start_color.rgb == "00CFE2F3"
+        assert ws_bible.cell(5, 5).fill.start_color.rgb == "00CFE2F3"
         assert ws_bible.cell(6, 3).value == "partial"
         assert ws_bible.cell(6, 3).fill.start_color.rgb == "00EBF1F8"
+        assert ws_bible.cell(6, 4).fill.start_color.rgb == "00000000"
 
         ws_complete = wb["완독자"]
+        assert ws_complete.cell(4, 6).value is None
         completion_pairs = {
             (ws_complete.cell(row, 3).value, ws_complete.cell(row, 4).value)
             for row in range(3, ws_complete.max_row + 1)
@@ -451,15 +476,19 @@ class TestBuildMergedXlsxDualUsers:
 
         ws_dual = wb["투트랙 진도표"]
         assert ws_dual.cell(5, 3).value == "both"
-        assert ws_dual.cell(5, 3).fill.start_color.rgb == "00D9EAD3"
+        assert ws_dual.cell(5, 3).fill.start_color.rgb == "00CFE2F3"
+        assert ws_dual.cell(5, 4).fill.start_color.rgb == "00CFE2F3"
+        assert ws_dual.cell(5, 5).fill.start_color.rgb == "00CFE2F3"
         assert ws_dual.cell(6, 3).value == "both"
-        assert ws_dual.cell(6, 3).fill.start_color.rgb == "00D9EAD3"
+        assert ws_dual.cell(6, 3).fill.start_color.rgb == "00CFE2F3"
         assert ws_dual.cell(7, 3).value == "old_only"
-        assert ws_dual.cell(7, 3).fill.start_color.rgb == "00D9EAD3"
+        assert ws_dual.cell(7, 3).fill.start_color.rgb == "00CFE2F3"
         assert ws_dual.cell(8, 3).value == "old_only"
         assert ws_dual.cell(8, 3).fill.start_color.rgb == "00EBF1F8"
+        assert ws_dual.cell(8, 4).fill.start_color.rgb == "00000000"
 
         ws_complete = wb["완독자"]
+        assert ws_complete.cell(4, 6).value is None
         completion_pairs = {
             (ws_complete.cell(row, 3).value, ws_complete.cell(row, 4).value)
             for row in range(3, ws_complete.max_row + 1)

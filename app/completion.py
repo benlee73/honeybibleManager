@@ -43,20 +43,13 @@ def is_complete(dates, expected):
     return bool(expected_set) and set(dates or ()) >= expected_set
 
 
-def progress(dates, expected):
-    """고정 기준 대비 인증 일수와 전체 일수를 반환한다."""
-    expected_set = set(expected or ())
-    return len(set(dates or ()) & expected_set), len(expected_set)
-
-
 def completion_row(track_label, user, emoji, dates, expected, leader=None):
     """완독자인 경우 완독자 시트 행을 반환한다. 미완독이면 None."""
     if not is_complete(dates, expected):
         return None
-    read_count, total_count = progress(dates, expected)
     if leader is None:
-        return [track_label, user, emoji, read_count, total_count]
-    return [leader, track_label, user, emoji, read_count, total_count]
+        return [track_label, user, emoji]
+    return [leader, track_label, user, emoji]
 
 
 @lru_cache(maxsize=1)
