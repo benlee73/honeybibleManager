@@ -768,8 +768,11 @@ class TestBuildOutputXlsx:
         assert ws_analysis.cell(6, 3).value.startswith("=COUNTA(")
         assert ws_analysis.cell(23, 2).value == "하차 주"
         assert ws_analysis.cell(23, 6).value is None
-        assert ws_analysis.cell(24, 3).value.startswith("=IF(E24=0")
-        assert ws_analysis.cell(24, 5).value.startswith("=COUNTIFS(")
+        assert ws_analysis.cell(24, 2).value == '=IF(E24="","",M24)'
+        assert ws_analysis.cell(24, 3).value.startswith('=IF(E24="",""')
+        assert ws_analysis.cell(24, 5).value.startswith("=IF(COUNTIFS(")
+        assert ws_analysis.cell(24, 13).value == "2/2~2/8"
+        assert ws_analysis.column_dimensions["M"].hidden is True
         assert len(ws_analysis._charts) >= 3
 
         ws_helper = wb["_분석계산"]

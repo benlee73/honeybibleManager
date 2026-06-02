@@ -792,7 +792,7 @@ def _progress_bucket_formula(helper_info, bucket, group):
 def _formula_dropout_rows(records, helper_info, start_row, start_col):
     dropout_rows_data = dropout_week_distribution(records)
     if not dropout_rows_data:
-        return [["-", "", "하차 추정 없음", "=0"]]
+        return [["-", "", "하차 추정 없음", ""]], []
 
     helper = helper_info["name"]
     first = helper_info["first_row"]
@@ -801,15 +801,21 @@ def _formula_dropout_rows(records, helper_info, start_row, start_col):
     week_range = _helper_range(helper, "T", first, last)
 
     rows = []
+    criteria_weeks = []
+    criteria_col = start_col + 11
     for offset, item in enumerate(dropout_rows_data, start=1):
         excel_row = start_row + offset
+        criteria_cell = _cell_addr(excel_row, criteria_col)
         week_cell = _cell_addr(excel_row, start_col)
         count_cell = _cell_addr(excel_row, start_col + 3)
-        count_formula = f'=COUNTIFS({status_range},"하차 추정",{week_range},{week_cell})'
-        date_formula = f'=IF({count_cell}=0,"",{_xl_text(item["date"])})'
-        position_formula = f'=IF({count_cell}=0,"",{_xl_text(item["position"])})'
-        rows.append([item["week"], date_formula, position_formula, count_formula])
-    return rows
+        raw_count = f'COUNTIFS({status_range},"하차 추정",{week_range},{criteria_cell})'
+        week_formula = f'=IF({count_cell}="","",{criteria_cell})'
+        count_formula = f'=IF({raw_count}=0,"",{raw_count})'
+        date_formula = f'=IF({count_cell}="","",{_xl_text(item["date"])})'
+        position_formula = f'=IF({count_cell}="","",{_xl_text(item["position"])})'
+        rows.append([week_formula, date_formula, position_formula, count_formula])
+        criteria_weeks.append(item["week"])
+    return rows, criteria_weeks
 
 
 def _source_has_date_formula(source, date_value):
@@ -874,6 +880,8 @@ def _visual_width(value):
 def _estimated_line_count(value, width):
     text = "" if value is None else str(value)
     if not text:
+        return 1
+    if text.startswith("="):
         return 1
     capacity = max(8, int((width or 12) * 1.5))
     return sum(max(1, ceil(_visual_width(part) / capacity)) for part in text.splitlines())
@@ -1149,7 +1157,7 @@ def add_formula_analysis_sheet(wb, records, part=1):
     _section_title(ws, row, col, "하차 추정 분포")
     dropout_headers = ["하차 주", "마지막 인증일", "진행 위치", "하차 추정 인원"]
     dropout_table_row = row + 1
-    dropout_rows = _formula_dropout_rows(records, helper_info, dropout_table_row, col)
+    dropout_rows, dropout_criteria_weeks = _formula_dropout_rows(records, helper_info, dropout_table_row, col)
     _style_table(
         ws,
         dropout_table_row,
@@ -1159,6 +1167,10 @@ def add_formula_analysis_sheet(wb, records, part=1):
         wrap_cols={1, 2},
         left_cols={2},
     )
+    criteria_col = col + 11
+    for offset, week in enumerate(dropout_criteria_weeks, start=1):
+        ws.cell(dropout_table_row + offset, criteria_col, week)
+    ws.column_dimensions[get_column_letter(criteria_col)].hidden = True
 
     chart = BarChart()
     chart.title = "하차 추정 분포"
