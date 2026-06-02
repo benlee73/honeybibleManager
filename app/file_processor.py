@@ -1,6 +1,7 @@
 """파일 형식 감지, 메타데이터 추출, 파일 변환 등 파일 처리 유틸리티."""
 
 import re
+import unicodedata
 import zipfile
 from io import BytesIO
 
@@ -154,7 +155,8 @@ def detect_schedule_type(rows, room_name, track_mode):
 
     if track_mode == "dual":
         return "dual"
-    if room_name and "교육국" in room_name:
+    normalized_room_name = unicodedata.normalize("NFC", room_name or "")
+    if "교육국" in normalized_room_name:
         return "education"
     schedule = detect_schedule(rows)
     if schedule is None:

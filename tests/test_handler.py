@@ -440,6 +440,9 @@ class TestDetectScheduleType:
     def test_교육국_방이름__education_반환(self):
         assert _detect_schedule_type([], "꿀성경 - 교육국", "single") == "education"
 
+    def test_교육국_방이름_NFD__education_반환(self):
+        assert _detect_schedule_type([], "꿀성경 - 교육국", "single") == "education"
+
     def test_성경일독_키워드__bible_반환(self):
         rows = [("user1", "창세기 1장"), ("user2", "출애굽기 2장")]
         assert _detect_schedule_type(rows, "일반방", "single") == "bible"
