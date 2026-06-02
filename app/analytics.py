@@ -21,7 +21,6 @@ GROUPS = [GROUP_ALL, GROUP_BIBLE, GROUP_NT, GROUP_DUAL]
 
 PROGRESS_BUCKETS = ["0%", "1~25%", "26~50%", "51~75%", "76~99%", "100%"]
 FORMULA_HELPER_SHEET = "_분석계산"
-DROPOUT_VISIBLE_LIMIT = 8
 
 
 @dataclass(frozen=True)
@@ -112,13 +111,32 @@ def _position_for_date(date_value, track, part):
     if index is None:
         index = 0
 
-    books = get_part_books("nt" if track == "nt" else "bible", part)
+    books = get_part_books("nt" if track in ("nt", "new") else "bible", part)
     if not books:
         return f"PART {normalize_part(part)} {index + 1}일차"
 
     ratio = index / max(1, len(expected) - 1)
     book_index = min(len(books) - 1, int(ratio * len(books)))
     return f"{books[book_index]} 부근"
+
+
+def _distribution_position_parts(position):
+    parts = []
+    seen = set()
+    for raw_part in str(position or "").split(" / "):
+        part = raw_part.strip()
+        for prefix in ("구약:", "신약:"):
+            if part.startswith(prefix):
+                part = part[len(prefix):].strip()
+        if part and part not in seen:
+            parts.append(part)
+            seen.add(part)
+    return parts
+
+
+def _distribution_position(position):
+    parts = _distribution_position_parts(position)
+    return " / ".join(parts) if parts else "진도 미확인"
 
 
 def _status(read_count, complete):
@@ -341,11 +359,12 @@ def dropout_distribution(records, group=GROUP_ALL):
         if record.status != "하차 추정":
             continue
         week_start, week_label = _week_bucket(record.last_date)
-        key = (week_start, week_label, record.last_position)
+        normalized_position = _distribution_position(record.last_position)
+        key = (week_start, week_label, normalized_position)
         item = buckets.setdefault(key, {
             "week_start": week_start,
             "week": week_label,
-            "position": record.last_position,
+            "position": normalized_position,
             "last_dates": set(),
             "names": [],
         })
@@ -377,11 +396,15 @@ def dropout_week_distribution(records, group=GROUP_ALL):
         item = buckets.setdefault(week_start, {
             "week": week_label,
             "last_dates": set(),
-            "positions": set(),
+            "positions": [],
+            "position_keys": set(),
             "names": [],
         })
         item["last_dates"].add(record.last_date)
-        item["positions"].add(record.last_position)
+        for position in _distribution_position_parts(record.last_position):
+            if position not in item["position_keys"]:
+                item["positions"].append(position)
+                item["position_keys"].add(position)
         item["names"].append(record.name)
 
     rows = []
@@ -389,7 +412,7 @@ def dropout_week_distribution(records, group=GROUP_ALL):
         rows.append({
             "week": item["week"],
             "date": ", ".join(_sort_dates(item["last_dates"])),
-            "position": " / ".join(sorted(item["positions"])),
+            "position": " / ".join(item["positions"]),
             "count": len(item["names"]),
         })
     return rows
@@ -680,7 +703,7 @@ def _add_formula_helper_sheet(wb, records, source_groups, part):
         "ID", "그룹", "담당", "이름", "이모티콘", "인증일수", "전체일수", "완독",
         "진행률", "마지막 인증일", "마지막 트랙", "마지막 위치", "상태",
         "소스1 마지막일", "소스1 정렬값", "소스1 위치",
-        "소스2 마지막일", "소스2 정렬값", "소스2 위치", "마지막 주", "마지막 정렬값",
+        "소스2 마지막일", "소스2 정렬값", "소스2 위치", "마지막 주", "마지막 정렬값", "분포 위치",
     ]
     for col, header in enumerate(headers, start=1):
         ws.cell(1, col, header)
@@ -721,10 +744,17 @@ def _add_formula_helper_sheet(wb, records, source_groups, part):
                 f'IF(AND(O{index}=R{index},O{index}>0),"구약: "&P{index}&" / 신약: "&S{index},'
                 f'IF(R{index}>O{index},S{index},P{index})))'
             ))
+            ws.cell(index, 22, (
+                f'=IF(J{index}="","미시작",'
+                f'IF(AND(O{index}=R{index},O{index}>0),'
+                f'IF(P{index}=S{index},P{index},P{index}&" / "&S{index}),'
+                f'IF(R{index}>O{index},S{index},P{index})))'
+            ))
         else:
             ws.cell(index, 10, f"=N{index}")
             ws.cell(index, 11, f'=IF(J{index}="","",B{index})')
             ws.cell(index, 12, f'=IF(J{index}="","미시작",P{index})')
+            ws.cell(index, 22, f"=L{index}")
 
         ws.cell(index, 13, f'=IF(H{index},"완독",IF(F{index}=0,"미시작","하차 추정"))')
         ws.cell(index, 21, f"=MAX(O{index},R{index})")
@@ -733,7 +763,7 @@ def _add_formula_helper_sheet(wb, records, source_groups, part):
             f'MATCH(U{index},$AG$2:$AG${map_end_row},0)),"미확인"))'
         ))
 
-    for col in range(1, 22):
+    for col in range(1, 23):
         ws.column_dimensions[get_column_letter(col)].width = 14
     for col in range(27, 34):
         ws.column_dimensions[get_column_letter(col)].width = 16
@@ -812,7 +842,7 @@ def _progress_bucket_formula(helper_info, bucket, group):
 def _formula_dropout_rows(records, helper_info, start_row, start_col):
     candidate_weeks = helper_info.get("dropout_weeks", [])
     if not candidate_weeks:
-        return [["-", "", "하차 추정 없음", ""]], [], 1
+        return [["-", "-", "", "하차 추정 없음", 0]], [], 1
 
     helper = helper_info["name"]
     first = helper_info["first_row"]
@@ -820,13 +850,12 @@ def _formula_dropout_rows(records, helper_info, start_row, start_col):
     status_range = _helper_range(helper, "M", first, last)
     last_order_range = _helper_range(helper, "U", first, last)
     last_date_range = _helper_range(helper, "J", first, last)
-    position_range = _helper_range(helper, "L", first, last)
+    position_range = _helper_range(helper, "V", first, last)
 
     criteria_col = start_col + 11
     raw_rows = []
     for offset, week_label in enumerate(candidate_weeks, start=1):
-        excel_row = start_row + offset
-        raw_count_cell = _cell_addr(excel_row, criteria_col + 3)
+        raw_count_cell = _cell_addr(start_row + offset, criteria_col + 3)
         week_start, week_end = _week_order_bounds(week_label)
         raw_match = (
             f'({status_range}="하차 추정")*'
@@ -834,36 +863,28 @@ def _formula_dropout_rows(records, helper_info, start_row, start_col):
             f'({last_order_range}<={week_end})'
         )
         raw_count = f"SUMPRODUCT({raw_match})"
-        count_formula = f'=IF({raw_count}=0,"",{raw_count})'
+        count_formula = f"={raw_count}"
         date_formula = (
-            f'=IF({raw_count_cell}="","",TEXTJOIN(", ",TRUE,UNIQUE(FILTER('
+            f'=IF({raw_count_cell}=0,"",TEXTJOIN(", ",TRUE,UNIQUE(FILTER('
             f'{last_date_range},{raw_match}))))'
         )
         position_formula = (
-            f'=IF({raw_count_cell}="","",TEXTJOIN(" / ",TRUE,UNIQUE(FILTER('
-            f'{position_range},{raw_match}))))'
+            f'=IF({raw_count_cell}=0,"",TEXTJOIN(" / ",TRUE,UNIQUE(TRANSPOSE(SPLIT('
+            f'TEXTJOIN(" / ",TRUE,FILTER({position_range},{raw_match}))," / ")))))'
         )
         raw_rows.append([week_label, date_formula, position_formula, count_formula])
 
-    raw_start = _cell_addr(start_row + 1, criteria_col)
-    raw_end = _cell_addr(start_row + len(raw_rows), criteria_col + 3)
-    raw_count_start = _cell_addr(start_row + 1, criteria_col + 3)
-    raw_count_end = _cell_addr(start_row + len(raw_rows), criteria_col + 3)
     visible_rows = []
-    for slot in range(1, DROPOUT_VISIBLE_LIMIT + 1):
-        row_fallbacks = ["-", "", "하차 추정 없음", ""] if slot == 1 else ["", "", "", ""]
-        visible_row = []
-        for col_offset, fallback in enumerate(row_fallbacks):
-            raw_col = get_column_letter(criteria_col + col_offset)
-            raw_col_range = f"{raw_col}{start_row + 1}:{raw_col}{start_row + len(raw_rows)}"
-            formula = (
-                f'=IFERROR(INDEX(FILTER({raw_col_range},'
-                f'{raw_count_start}:{raw_count_end}<>""),{slot}),'
-                f'{_xl_literal(fallback)})'
-            )
-            visible_row.append(formula)
-        visible_rows.append(visible_row)
-    return visible_rows, raw_rows, DROPOUT_VISIBLE_LIMIT
+    for slot in range(1, len(raw_rows) + 1):
+        raw_row = start_row + slot
+        visible_rows.append([
+            f"{slot}주차",
+            f"={_cell_addr(raw_row, criteria_col)}",
+            f"={_cell_addr(raw_row, criteria_col + 1)}",
+            f"={_cell_addr(raw_row, criteria_col + 2)}",
+            f"={_cell_addr(raw_row, criteria_col + 3)}",
+        ])
+    return visible_rows, raw_rows, len(raw_rows)
 
 
 def _source_has_date_formula(source, date_value):
@@ -1048,6 +1069,7 @@ def add_analysis_sheet(wb, records):
     distribution = progress_distribution(records)
     dist_headers = ["구간"] + GROUPS
     dist_rows = [[item["bucket"]] + [item[group] for group in GROUPS] for item in distribution]
+    dist_rows.append(["합"] + [sum(item[group] for item in distribution) for group in GROUPS])
     dist_table_row = row + 1
     _style_table(ws, dist_table_row, col, dist_headers, dist_rows)
 
@@ -1056,9 +1078,9 @@ def add_analysis_sheet(wb, records):
     chart.y_axis.title = "인원"
     chart.x_axis.title = "진행률"
     data = Reference(ws, min_col=col + 1, max_col=col + len(GROUPS),
-                     min_row=dist_table_row, max_row=dist_table_row + len(dist_rows))
+                     min_row=dist_table_row, max_row=dist_table_row + len(distribution))
     categories = Reference(ws, min_col=col, min_row=dist_table_row + 1,
-                           max_row=dist_table_row + len(dist_rows))
+                           max_row=dist_table_row + len(distribution))
     chart.add_data(data, titles_from_data=True)
     chart.set_categories(categories)
     chart.height = 7
@@ -1068,13 +1090,13 @@ def add_analysis_sheet(wb, records):
     row += len(dist_rows) + 4
     _section_title(ws, row, col, "하차 추정 분포")
     dropout_rows_data = dropout_week_distribution(records)
-    dropout_headers = ["하차 주", "마지막 인증일", "진행 위치", "하차 추정 인원"]
+    dropout_headers = ["주차", "하차 주", "마지막 인증일", "진행 위치", "하차 추정 인원"]
     dropout_rows = [
-        [item["week"], item["date"], item["position"], item["count"]]
-        for item in dropout_rows_data
+        [f"{index}주차", item["week"], item["date"], item["position"], item["count"]]
+        for index, item in enumerate(dropout_rows_data, start=1)
     ]
     if not dropout_rows:
-        dropout_rows = [["-", "-", "하차 추정 없음", 0]]
+        dropout_rows = [["-", "-", "", "하차 추정 없음", 0]]
     dropout_table_row = row + 1
     _style_table(
         ws,
@@ -1082,16 +1104,16 @@ def add_analysis_sheet(wb, records):
         col,
         dropout_headers,
         dropout_rows,
-        wrap_cols={1, 2},
-        left_cols={2},
+        wrap_cols={2, 3},
+        left_cols={3},
     )
 
-    if any(row_data[3] for row_data in dropout_rows):
+    if any(row_data[4] for row_data in dropout_rows):
         chart = BarChart()
         chart.title = "하차 추정 분포"
         chart.y_axis.title = "인원"
-        chart.x_axis.title = "하차 주"
-        data = Reference(ws, min_col=col + 3, min_row=dropout_table_row,
+        chart.x_axis.title = "주차"
+        data = Reference(ws, min_col=col + 4, min_row=dropout_table_row,
                          max_row=dropout_table_row + len(dropout_rows))
         categories = Reference(ws, min_col=col, min_row=dropout_table_row + 1,
                                max_row=dropout_table_row + len(dropout_rows))
@@ -1099,7 +1121,7 @@ def add_analysis_sheet(wb, records):
         chart.set_categories(categories)
         chart.height = 7
         chart.width = 16
-        ws.add_chart(chart, "H25")
+        ws.add_chart(chart, f"H{dropout_table_row}")
 
     row += len(dropout_rows) + 4
     _section_title(ws, row, col, "날짜별 인증 인원 추이")
@@ -1122,7 +1144,7 @@ def add_analysis_sheet(wb, records):
         chart.set_categories(categories)
         chart.height = 7
         chart.width = 16
-        ws.add_chart(chart, "H39")
+        ws.add_chart(chart, f"H{trend_table_row}")
 
     row += len(trend_rows) + 4
     _section_title(ws, row, col, "상세 명단")
@@ -1180,11 +1202,21 @@ def add_formula_analysis_sheet(wb, records, part=1):
     row += len(summary_rows) + 4
     _section_title(ws, row, col, "진행률 구간 분포")
     dist_headers = ["구간"] + GROUPS
+    dist_table_row = row + 1
     dist_rows = [
         [bucket] + [_progress_bucket_formula(helper_info, bucket, group) for group in GROUPS]
         for bucket in PROGRESS_BUCKETS
     ]
-    dist_table_row = row + 1
+    bucket_first_row = dist_table_row + 1
+    bucket_last_row = dist_table_row + len(PROGRESS_BUCKETS)
+    dist_rows.append([
+        "합",
+        *[
+            f"=SUM({_cell_addr(bucket_first_row, col + group_offset)}:"
+            f"{_cell_addr(bucket_last_row, col + group_offset)})"
+            for group_offset in range(1, len(GROUPS) + 1)
+        ],
+    ])
     _style_table(ws, dist_table_row, col, dist_headers, dist_rows)
 
     chart = BarChart()
@@ -1192,9 +1224,9 @@ def add_formula_analysis_sheet(wb, records, part=1):
     chart.y_axis.title = "인원"
     chart.x_axis.title = "진행률"
     data = Reference(ws, min_col=col + 1, max_col=col + len(GROUPS),
-                     min_row=dist_table_row, max_row=dist_table_row + len(dist_rows))
+                     min_row=dist_table_row, max_row=dist_table_row + len(PROGRESS_BUCKETS))
     categories = Reference(ws, min_col=col, min_row=dist_table_row + 1,
-                           max_row=dist_table_row + len(dist_rows))
+                           max_row=dist_table_row + len(PROGRESS_BUCKETS))
     chart.add_data(data, titles_from_data=True)
     chart.set_categories(categories)
     chart.height = 7
@@ -1203,7 +1235,7 @@ def add_formula_analysis_sheet(wb, records, part=1):
 
     row += len(dist_rows) + 4
     _section_title(ws, row, col, "하차 추정 분포")
-    dropout_headers = ["하차 주", "마지막 인증일", "진행 위치", "하차 추정 인원"]
+    dropout_headers = ["주차", "하차 주", "마지막 인증일", "진행 위치", "하차 추정 인원"]
     dropout_table_row = row + 1
     dropout_rows, dropout_raw_rows, dropout_visible_slots = _formula_dropout_rows(
         records,
@@ -1217,8 +1249,8 @@ def add_formula_analysis_sheet(wb, records, part=1):
         col,
         dropout_headers,
         dropout_rows,
-        wrap_cols={1, 2},
-        left_cols={2},
+        wrap_cols={2, 3},
+        left_cols={3},
     )
     criteria_col = col + 11
     for row_offset, raw_row in enumerate(dropout_raw_rows, start=1):
@@ -1230,8 +1262,8 @@ def add_formula_analysis_sheet(wb, records, part=1):
     chart = BarChart()
     chart.title = "하차 추정 분포"
     chart.y_axis.title = "인원"
-    chart.x_axis.title = "하차 주"
-    data = Reference(ws, min_col=col + 3, min_row=dropout_table_row,
+    chart.x_axis.title = "주차"
+    data = Reference(ws, min_col=col + 4, min_row=dropout_table_row,
                      max_row=dropout_table_row + dropout_visible_slots)
     categories = Reference(ws, min_col=col, min_row=dropout_table_row + 1,
                            max_row=dropout_table_row + dropout_visible_slots)
@@ -1239,7 +1271,7 @@ def add_formula_analysis_sheet(wb, records, part=1):
     chart.set_categories(categories)
     chart.height = 7
     chart.width = 16
-    ws.add_chart(chart, "H25")
+    ws.add_chart(chart, f"H{dropout_table_row}")
 
     row += dropout_visible_slots + 4
     _section_title(ws, row, col, "날짜별 인증 인원 추이")
@@ -1263,7 +1295,7 @@ def add_formula_analysis_sheet(wb, records, part=1):
     chart.set_categories(categories)
     chart.height = 7
     chart.width = 16
-    ws.add_chart(chart, "H39")
+    ws.add_chart(chart, f"H{trend_table_row}")
 
     row += len(trend_rows) + 4
     _section_title(ws, row, col, "상세 명단")

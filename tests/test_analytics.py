@@ -1,6 +1,7 @@
 from openpyxl import Workbook
 
 from app.analytics import (
+    AnalysisRecord,
     GROUP_ALL,
     GROUP_BIBLE,
     GROUP_DUAL,
@@ -176,6 +177,58 @@ def test_하차_주_분포__같은_주_여러_위치를_하나로_묶음():
     assert "마태복음 부근" in dropout[0]["position"]
 
 
+def test_하차_주_분포__트랙_접두어와_중복_위치를_정리():
+    records = [
+        AnalysisRecord(
+            group=GROUP_BIBLE,
+            name="bible",
+            emoji="",
+            leader="",
+            read_count=1,
+            expected_count=10,
+            complete=False,
+            last_date="3/16",
+            last_track=GROUP_BIBLE,
+            last_position="사사기 부근",
+            status="하차 추정",
+            activity_dates=frozenset({"3/16"}),
+        ),
+        AnalysisRecord(
+            group=GROUP_DUAL,
+            name="dual",
+            emoji="",
+            leader="",
+            read_count=2,
+            expected_count=20,
+            complete=False,
+            last_date="3/16",
+            last_track="구약/신약",
+            last_position="구약: 사사기 부근 / 신약: 룻기 부근 / 구약: 사사기 부근 / 신약: 사사기 부근",
+            status="하차 추정",
+            activity_dates=frozenset({"3/16"}),
+        ),
+    ]
+
+    dropout = dropout_week_distribution(records)
+
+    assert len(dropout) == 1
+    assert dropout[0]["position"] == "사사기 부근 / 룻기 부근"
+
+
+def test_투트랙_신약_진행위치는_신약_권명으로_계산():
+    dual_users = {
+        "dual": {
+            "dates_old": {"3/16"},
+            "dates_new": {"3/16"},
+            "emoji": "",
+        }
+    }
+
+    records = build_merged_analysis_records({}, {}, dual_users, part=1)
+
+    assert records[0].last_position == "구약: 사사기 부근 / 신약: 마가복음 부근"
+
+
 def test_날짜별_인증_추이__사용자별_일자_집계():
     users = {
         "user1": {"dates": {"2/2", "2/3"}, "emoji": "😀"},
@@ -201,11 +254,14 @@ def test_add_analysis_sheet__표와_차트_생성():
     assert ws.cell(2, 2).value == "분석결과"
     assert ws.cell(5, 2).value == "그룹"
     assert ws.cell(6, 2).value == "전체"
-    assert ws.cell(23, 2).value == "하차 주"
-    assert ws.cell(24, 2).value == "2/2~2/8"
-    assert "|" not in ws.cell(24, 2).value
-    assert ws.cell(24, 4).alignment.wrap_text is True
-    assert ws.cell(24, 4).alignment.horizontal == "left"
-    assert ws.cell(23, 6).value is None
+    assert ws.cell(20, 2).value == "합"
+    assert ws.cell(24, 2).value == "주차"
+    assert ws.cell(24, 3).value == "하차 주"
+    assert ws.cell(25, 2).value == "1주차"
+    assert ws.cell(25, 3).value == "2/2~2/8"
+    assert "|" not in ws.cell(25, 3).value
+    assert ws.cell(25, 5).alignment.wrap_text is True
+    assert ws.cell(25, 5).alignment.horizontal == "left"
+    assert ws.cell(24, 7).value is None
     assert ws.column_dimensions["F"].width >= 40
     assert len(ws._charts) >= 3

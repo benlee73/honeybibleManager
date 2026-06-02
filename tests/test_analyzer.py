@@ -766,18 +766,26 @@ class TestBuildOutputXlsx:
         ws_analysis = wb["분석결과"]
         assert ws_analysis.cell(2, 2).value == "분석결과"
         assert ws_analysis.cell(6, 3).value.startswith("=COUNTA(")
-        assert ws_analysis.cell(23, 2).value == "하차 주"
-        assert ws_analysis.cell(23, 6).value is None
-        assert ws_analysis.cell(24, 2).value.startswith("=IFERROR(INDEX(FILTER(M24:M")
-        assert ws_analysis.cell(24, 3).value.startswith("=IFERROR(INDEX(FILTER(N24:N")
-        assert ws_analysis.cell(24, 5).value.startswith("=IFERROR(INDEX(FILTER(P24:P")
-        assert ws_analysis.cell(25, 2).value.startswith("=IFERROR(INDEX(FILTER(M24:M")
-        assert ws_analysis.cell(24, 13).value == "2/2~2/8"
-        assert ws_analysis.cell(25, 13).value == "2/9~2/15"
-        assert ws_analysis.cell(24, 14).value.startswith("=IF(P24=\"\",\"\",TEXTJOIN(")
-        assert ws_analysis.cell(24, 16).value.startswith("=IF(SUMPRODUCT(")
-        assert "$U$2:$U$3" in ws_analysis.cell(24, 16).value
-        assert "$T$2:$T$3" not in ws_analysis.cell(24, 16).value
+        assert ws_analysis.cell(20, 2).value == "합"
+        assert ws_analysis.cell(20, 3).value == "=SUM(C14:C19)"
+        assert ws_analysis.cell(24, 2).value == "주차"
+        assert ws_analysis.cell(24, 3).value == "하차 주"
+        assert ws_analysis.cell(24, 7).value is None
+        assert ws_analysis.cell(25, 2).value == "1주차"
+        assert ws_analysis.cell(25, 3).value == "=M25"
+        assert ws_analysis.cell(25, 4).value == "=N25"
+        assert ws_analysis.cell(25, 5).value == "=O25"
+        assert ws_analysis.cell(25, 6).value == "=P25"
+        assert ws_analysis.cell(33, 2).value == "9주차"
+        assert ws_analysis.cell(25, 13).value == "2/2~2/8"
+        assert ws_analysis.cell(26, 13).value == "2/9~2/15"
+        assert ws_analysis.cell(33, 13).value == "3/30~4/5"
+        assert ws_analysis.cell(25, 14).value.startswith("=IF(P25=0,\"\",TEXTJOIN(")
+        assert "SPLIT(TEXTJOIN" in ws_analysis.cell(25, 15).value
+        assert "$V$2:$V$3" in ws_analysis.cell(25, 15).value
+        assert ws_analysis.cell(25, 16).value.startswith("=SUMPRODUCT(")
+        assert "$U$2:$U$3" in ws_analysis.cell(25, 16).value
+        assert "$T$2:$T$3" not in ws_analysis.cell(25, 16).value
         assert ws_analysis.column_dimensions["M"].hidden is True
         assert ws_analysis.column_dimensions["P"].hidden is True
         assert len(ws_analysis._charts) >= 3
@@ -792,6 +800,7 @@ class TestBuildOutputXlsx:
         assert ws_helper.cell(2, 20).value.startswith("=IF(U2=0")
         assert "K2" not in ws_helper.cell(2, 20).value
         assert ws_helper.cell(2, 21).value == "=MAX(O2,R2)"
+        assert ws_helper.cell(2, 22).value == "=L2"
 
     def test_build_output_xlsx__dual_완독자_시트와_트랙별_강조(self):
         from openpyxl import load_workbook
@@ -846,6 +855,9 @@ class TestBuildOutputXlsx:
         assert "COUNTIF('구약 진도표'!" in ws_helper.cell(2, 6).value
         assert "COUNTIF('신약 진도표'!" in ws_helper.cell(2, 6).value
         assert ws_helper.cell(2, 11).value.startswith("=IF(AND(O2=0,R2=0)")
+        assert ws_helper.cell(2, 22).value.startswith('=IF(J2="","미시작"')
+        assert '"구약: "' not in ws_helper.cell(2, 22).value
+        assert '"신약: "' not in ws_helper.cell(2, 22).value
 
 
 class TestMetaSheet:
