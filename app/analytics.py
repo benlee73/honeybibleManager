@@ -1,5 +1,6 @@
 """분석결과 시트 생성 및 진행 통계 계산."""
 
+import datetime
 from dataclasses import dataclass
 from statistics import median
 
@@ -47,6 +48,23 @@ def _date_key(value):
         return int(month), int(day)
     except (ValueError, TypeError):
         return 99, 99
+
+
+def _date_value(value):
+    try:
+        month, day = str(value).split("/")
+        return datetime.date(2026, int(month), int(day))
+    except (ValueError, TypeError):
+        return None
+
+
+def _week_bucket(value):
+    date_value = _date_value(value)
+    if date_value is None:
+        return datetime.date(9999, 12, 31), "미확인"
+    week_start = date_value - datetime.timedelta(days=date_value.weekday())
+    week_end = week_start + datetime.timedelta(days=6)
+    return week_start, f"{week_start.month}/{week_start.day}~{week_end.month}/{week_end.day}"
 
 
 def _sort_dates(dates):
@@ -172,6 +190,36 @@ def _dual_record(name, data, part, leader=""):
     )
 
 
+def _dedupe_records(records, dedupe_names=None):
+    """지정된 이름만 여러 그룹에 있을 때 대표 레코드 하나로 줄인다."""
+    dedupe_names = set(dedupe_names or [])
+    priority = {
+        GROUP_DUAL: 3,
+        GROUP_BIBLE: 2,
+        GROUP_NT: 1,
+    }
+
+    def score(record):
+        return (
+            1 if record.complete else 0,
+            record.progress_rate,
+            record.read_count,
+            priority.get(record.group, 0),
+        )
+
+    selected = {}
+    kept = []
+    for record in records:
+        if record.name not in dedupe_names:
+            kept.append(record)
+            continue
+        existing = selected.get(record.name)
+        if existing is None or score(record) > score(existing):
+            selected[record.name] = record
+    kept.extend(selected.values())
+    return kept
+
+
 def build_output_analysis_records(users, track_mode="single", meta=None):
     """개별 분석 결과 XLSX용 사용자별 분석 레코드를 생성한다."""
     part = normalize_part((meta or {}).get("part", 1))
@@ -192,7 +240,7 @@ def build_output_analysis_records(users, track_mode="single", meta=None):
     return records
 
 
-def build_merged_analysis_records(bible_users, nt_users, dual_users=None, part=1):
+def build_merged_analysis_records(bible_users, nt_users, dual_users=None, part=1, dedupe_names=None):
     """통합 XLSX용 사용자별 분석 레코드를 생성한다."""
     part = normalize_part(part)
     records = []
@@ -206,7 +254,17 @@ def build_merged_analysis_records(bible_users, nt_users, dual_users=None, part=1
     for name in sorted((dual_users or {}).keys(), key=lambda u: ((dual_users or {})[u].get("leader", ""), u)):
         records.append(_dual_record(name, dual_users[name], part))
 
-    return records
+    return sorted(_dedupe_records(records, dedupe_names), key=lambda r: (r.group, r.leader, r.name))
+
+
+def dedupe_record_count(records, dedupe_names=None):
+    """지정된 dedupe 대상 기준의 분석 레코드 인원 수를 반환한다."""
+    return len(_dedupe_records(records, dedupe_names))
+
+
+def dual_record_count(records):
+    """투트랙 분석 레코드 수를 반환한다."""
+    return sum(1 for record in records if record.group == GROUP_DUAL)
 
 
 def summarize_records(records):
@@ -262,21 +320,31 @@ def progress_distribution(records):
 
 
 def dropout_distribution(records, group=GROUP_ALL):
-    """하차 추정자의 마지막 인증일+진행 위치 분포를 반환한다."""
+    """하차 추정자의 마지막 인증 주+진행 위치 분포를 반환한다."""
     selected = records if group == GROUP_ALL else [r for r in records if r.group == group]
     buckets = {}
     for record in selected:
         if record.status != "하차 추정":
             continue
-        key = (record.last_date, record.last_position)
-        item = buckets.setdefault(key, {"date": record.last_date, "position": record.last_position, "names": []})
+        week_start, week_label = _week_bucket(record.last_date)
+        key = (week_start, week_label, record.last_position)
+        item = buckets.setdefault(key, {
+            "week_start": week_start,
+            "week": week_label,
+            "position": record.last_position,
+            "last_dates": set(),
+            "names": [],
+        })
+        item["last_dates"].add(record.last_date)
         item["names"].append(record.name)
 
     rows = []
-    for (last_date, position), item in sorted(buckets.items(), key=lambda entry: _date_key(entry[0][0])):
+    for (_, week_label, position), item in sorted(buckets.items(), key=lambda entry: entry[0][0]):
+        last_dates = _sort_dates(item["last_dates"])
         rows.append({
-            "label": f"{last_date} | {position}",
-            "date": last_date,
+            "label": f"{week_label} | {position}",
+            "week": week_label,
+            "date": ", ".join(last_dates),
             "position": position,
             "count": len(item["names"]),
             "names": ", ".join(sorted(item["names"])),
@@ -431,7 +499,7 @@ def add_analysis_sheet(wb, records):
     row += len(dist_rows) + 4
     _section_title(ws, row, col, "하차 추정 분포")
     dropout_rows_data = dropout_distribution(records)
-    dropout_headers = ["하차 위치", "마지막 인증일", "진행 위치", "하차 추정 인원", "이름"]
+    dropout_headers = ["하차 주/위치", "마지막 인증일", "진행 위치", "하차 추정 인원", "이름"]
     dropout_rows = [
         [item["label"], item["date"], item["position"], item["count"], item["names"]]
         for item in dropout_rows_data

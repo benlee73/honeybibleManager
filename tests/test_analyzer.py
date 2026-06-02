@@ -805,10 +805,12 @@ class TestBuildOutputXlsx:
             (ws_complete.cell(row, 2).value, ws_complete.cell(row, 3).value)
             for row in range(3, ws_complete.max_row + 1)
         }
-        assert ("구약", "both") in completion_pairs
-        assert ("신약", "both") in completion_pairs
-        assert ("둘 다", "both") in completion_pairs
-        assert ("구약", "old_only") in completion_pairs
+        assert ("투트랙", "both") in completion_pairs
+        assert ("구약", "both") not in completion_pairs
+        assert ("신약", "both") not in completion_pairs
+        assert ("둘 다", "both") not in completion_pairs
+        assert ("투트랙", "old_only") not in completion_pairs
+        assert ("구약", "old_only") not in completion_pairs
         assert ("신약", "old_only") not in completion_pairs
 
 

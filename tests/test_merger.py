@@ -366,6 +366,27 @@ class TestBuildMergedXlsx:
         assert ws_analysis.cell(2, 2).value == "분석결과"
         assert len(ws_analysis._charts) >= 3
 
+    def test_분석결과__교육국_멤버만_이름_중복제거(self):
+        bible_users = {
+            "김태환": {"dates": {"2/2", "2/3"}, "emoji": "😀", "leader": "방장A"},
+            "김치훈": {"dates": {"2/2"}, "emoji": "🌿", "leader": "방장A"},
+            "동명이인": {"dates": {"2/2"}, "emoji": "🔥", "leader": "방장A"},
+        }
+        nt_users = {
+            "김태환": {"dates": {"2/2"}, "emoji": "😀", "leader": "방장B"},
+            "김치훈": {"dates": {"2/2"}, "emoji": "🌿", "leader": "방장B"},
+            "동명이인": {"dates": {"2/2"}, "emoji": "✨", "leader": "방장B"},
+        }
+
+        xlsx_bytes = build_merged_xlsx(bible_users, nt_users)
+        wb = load_workbook(io.BytesIO(xlsx_bytes))
+        ws = wb["분석결과"]
+
+        # row 5 = 요약 헤더, row 6 = 전체 요약. 김태환은 방장이라 1명,
+        # 김치훈은 room_members의 일반 참여자라 2명, 동명이인도 2명으로 유지된다.
+        assert ws.cell(6, 2).value == "전체"
+        assert ws.cell(6, 3).value == 5
+
 
 class TestBuildMergedPreview:
     def test_양쪽_사용자_포함(self):
@@ -508,10 +529,12 @@ class TestBuildMergedXlsxDualUsers:
             (ws_complete.cell(row, 3).value, ws_complete.cell(row, 4).value)
             for row in range(3, ws_complete.max_row + 1)
         }
-        assert ("투트랙(구약)", "both") in completion_pairs
-        assert ("투트랙(신약)", "both") in completion_pairs
-        assert ("투트랙(둘 다)", "both") in completion_pairs
-        assert ("투트랙(구약)", "old_only") in completion_pairs
+        assert ("투트랙", "both") in completion_pairs
+        assert ("투트랙(구약)", "both") not in completion_pairs
+        assert ("투트랙(신약)", "both") not in completion_pairs
+        assert ("투트랙(둘 다)", "both") not in completion_pairs
+        assert ("투트랙", "old_only") not in completion_pairs
+        assert ("투트랙(구약)", "old_only") not in completion_pairs
         assert ("투트랙(신약)", "old_only") not in completion_pairs
 
 

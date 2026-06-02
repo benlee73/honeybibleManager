@@ -48,6 +48,29 @@ def load_education_config():
         return {"nt_members": [], "excluded_members": []}
 
 
+def _education_dedupe_names(config):
+    """분석결과에서 이름 중복 제거를 적용할 교육국 담당자 이름 집합을 만든다."""
+    names = set()
+    for key in ("nt_members", "excluded_members", "dual_excluded_members"):
+        names.update(config.get(key, []))
+
+    for leader in config.get("room_members", {}):
+        names.add(leader)
+
+    for rule in config.get("leader_overrides", []):
+        names.add(rule.get("detected", ""))
+        names.add(rule.get("actual", ""))
+
+    aliases = config.get("name_aliases", {})
+    for alias, canonical in aliases.items():
+        if canonical in names:
+            names.add(alias)
+        if alias in names:
+            names.add(canonical)
+
+    return {name for name in names if name}
+
+
 def _normalize_room_name(room):
     """방이름에서 '꿀성경' 접두사와 구분자를 제거하여 정규화한다."""
     for prefix in ("꿀성경 - ", "꿀성경 ", "꿀성경"):
@@ -574,9 +597,16 @@ def build_merged_xlsx(bible_users, nt_users, dual_users=None, part=1):
         )
 
     _build_merged_completion_sheet(wb, bible_users, nt_users, dual_users or {}, part=part)
+    edu_config = load_education_config()
     add_analysis_sheet(
         wb,
-        build_merged_analysis_records(bible_users, nt_users, dual_users or {}, part=part),
+        build_merged_analysis_records(
+            bible_users,
+            nt_users,
+            dual_users or {},
+            part=part,
+            dedupe_names=_education_dedupe_names(edu_config),
+        ),
     )
 
     buf = io.BytesIO()
@@ -666,30 +696,10 @@ def _build_merged_completion_sheet(wb, bible_users, nt_users, dual_users, part=1
         old_complete = is_complete(dates_old, bible_expected)
         new_complete = is_complete(dates_new, nt_expected)
 
-        old_row = completion_row(
-            "투트랙(구약)",
-            user,
-            data.get("emoji", ""),
-            dates_old,
-            bible_expected,
-            leader=data.get("leader", ""),
-        )
-        if old_row:
-            rows.append(old_row)
-        new_row = completion_row(
-            "투트랙(신약)",
-            user,
-            data.get("emoji", ""),
-            dates_new,
-            nt_expected,
-            leader=data.get("leader", ""),
-        )
-        if new_row:
-            rows.append(new_row)
         if old_complete and new_complete:
             rows.append([
                 data.get("leader", ""),
-                "투트랙(둘 다)",
+                "투트랙",
                 user,
                 data.get("emoji", ""),
             ])

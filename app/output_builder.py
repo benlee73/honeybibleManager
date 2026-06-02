@@ -381,14 +381,8 @@ def _dual_completion_data(users, old_rows, new_rows, meta):
         old_complete = is_complete(dates_old, old_expected)
         new_complete = is_complete(dates_new, new_expected)
 
-        old_row = completion_row("구약", user, data.get("emoji", ""), dates_old, old_expected)
-        if old_row:
-            completion_rows.append(old_row)
-        new_row = completion_row("신약", user, data.get("emoji", ""), dates_new, new_expected)
-        if new_row:
-            completion_rows.append(new_row)
         if old_complete and new_complete:
-            completion_rows.append(["둘 다", user, data.get("emoji", "")])
+            completion_rows.append(["투트랙", user, data.get("emoji", "")])
 
     return old_completed_rows, new_completed_rows, completion_rows
 
