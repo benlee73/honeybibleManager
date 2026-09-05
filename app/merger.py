@@ -475,8 +475,13 @@ def merge_files(dual_mode="separate"):
         canonical_leader = resolve_alias(leader, name_aliases) if leader else leader
         leader_overrides = edu_config.get("leader_overrides", [])
         canonical_leader = resolve_leader_override(canonical_leader, users, leader_overrides)
+        # 분석 시 추출해 _메타에 기록한 명단을 우선 사용하고, 없으면 설정으로 폴백
+        meta_roster = [
+            name.strip() for name in (meta.get("room_members") or "").split(",")
+            if name.strip()
+        ]
         room_members_cfg = edu_config.get("room_members", {})
-        members_list = room_members_cfg.get(canonical_leader, [])
+        members_list = meta_roster or room_members_cfg.get(canonical_leader, [])
         for member in members_list:
             if member not in users:
                 if track_mode == "dual":

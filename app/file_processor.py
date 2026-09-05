@@ -24,6 +24,16 @@ _ZIP_FILENAME_RE = re.compile(
 )
 
 _LEADER_KEYWORD = "꿀성경 진행 방식 안내"
+
+# 방 멤버 명단은 카톡 시스템 메시지에 그대로 남아 있다. CSV는 시스템 메시지도
+# 한 행으로 들어오지만 TXT/ZIP은 parse_txt가 걸러내므로 원문에서 직접 읽는다.
+_ACTOR = r"(?<![\w가-힣])([가-힣A-Za-z0-9 _\-.]{1,30}?)님이"
+_INVITE_RE = re.compile(_ACTOR + r"\s+(.+?)(?:을|를)\s+초대했습니다")
+_KICK_RE = re.compile(_ACTOR + r"\s+(.+?)(?:을|를)\s+내보냈습니다")
+_NAME_IN_LIST_RE = re.compile(r"([^,]+?)님(?:,|과|와|$)")
+_OWNER_RE = re.compile(r"(?<![\w가-힣])([가-힣A-Za-z0-9 _\-.]{1,30}?)님이\s+방장이\s+되어")
+_JOIN_RE = re.compile(r"(?<![\w가-힣])([가-힣A-Za-z0-9 _\-.]{1,30}?)님이\s+들어왔습니다")
+_LEAVE_RE = re.compile(r"(?<![\w가-힣])([가-힣A-Za-z0-9 _\-.]{1,30}?)님이\s+나갔습니다")
 _DUAL_MARKER = "헷갈릴 수 있는 내용을 다시 안내드립니다"
 
 # 투트랙 방은 인증마다 "구약"/"신약"을 적는다. 공지 문구는 기수마다 바뀌므로
@@ -91,6 +101,44 @@ def extract_zip_meta(filename):
     room_name = m.group(1)
     saved_date = f"{m.group(2)}/{m.group(3)}/{m.group(4)}-{m.group(5)}:{m.group(6)}"
     return room_name, saved_date
+
+
+def extract_room_roster(text, normalize_name):
+    """대화 원문의 초대·입퇴장 시스템 메시지로 방 멤버 명단을 만든다.
+
+    한 번도 인증하지 않은 멤버를 진도표에 남기기 위한 명단이다.
+    normalize_name은 표시 이름에서 실제 이름만 남기는 함수(analyzer.normalize_user_name).
+    """
+    if not text:
+        return []
+
+    joined = set()
+    left = set()
+    for match in _INVITE_RE.finditer(text):
+        # 초대한 사람도 방 멤버다 (부방장이 초대하는 경우가 있다)
+        joined.add(match.group(1))
+        joined.update(n.strip() for n in _NAME_IN_LIST_RE.findall(match.group(2)))
+    for match in _OWNER_RE.finditer(text):
+        joined.add(match.group(1))
+    for match in _JOIN_RE.finditer(text):
+        joined.add(match.group(1))
+    for match in _LEAVE_RE.finditer(text):
+        left.add(match.group(1))
+    for match in _KICK_RE.finditer(text):
+        joined.add(match.group(1))
+        left.update(n.strip() for n in _NAME_IN_LIST_RE.findall(match.group(2)))
+
+    def cleaned(names):
+        result = set()
+        for name in names:
+            value = normalize_name(name.strip())
+            if value:
+                result.add(value)
+        return result
+
+    roster = sorted(cleaned(joined) - cleaned(left))
+    logger.info("방 멤버 명단 추출: %d명", len(roster))
+    return roster
 
 
 def detect_track_mode(rows):

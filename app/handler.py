@@ -11,6 +11,7 @@ from urllib.parse import unquote
 from app.analyzer import (
     analyze_chat,
     apply_message_corrections,
+    normalize_user_name,
     build_output_xlsx,
     build_preview_data,
     decode_payload,
@@ -25,6 +26,7 @@ from app.file_processor import (
     detect_track_mode,
     extract_csv_meta,
     extract_leader,
+    extract_room_roster,
     extract_txt_from_zip,
     extract_zip_meta,
 )
@@ -425,6 +427,7 @@ class HoneyBibleHandler(BaseHTTPRequestHandler):
                     self._send_json(400, {"message": zip_error})
                     return
                 text = decode_payload(txt_bytes)
+                chat_text = text
                 rows = parse_txt(text)
                 meta = extract_chat_meta(text)
                 room_name = meta["room_name"]
@@ -438,12 +441,14 @@ class HoneyBibleHandler(BaseHTTPRequestHandler):
                         saved_date = zip_date
             elif file_format == "txt":
                 text = decode_payload(file_bytes)
+                chat_text = text
                 rows = parse_txt(text)
                 meta = extract_chat_meta(text)
                 room_name = meta["room_name"]
                 saved_date = meta["saved_date"]
             else:
                 csv_text = decode_payload(file_bytes)
+                chat_text = csv_text
                 rows = parse_csv_rows(csv_text)
                 room_name, saved_date = extract_csv_meta(filename)
 
@@ -473,10 +478,29 @@ class HoneyBibleHandler(BaseHTTPRequestHandler):
             canonical_leader = resolve_alias(leader, name_aliases) if leader else leader
             leader_overrides = edu_config.get("leader_overrides", [])
             canonical_leader = resolve_leader_override(canonical_leader, users, leader_overrides)
+            # 초대 기록에서 뽑은 명단을 우선 사용하고, 없으면 설정의 수동 명단으로 폴백
+            roster = [
+                resolve_alias(name, name_aliases)
+                for name in extract_room_roster(chat_text, normalize_user_name)
+            ]
             room_members = edu_config.get("room_members", {})
-            members_list = room_members.get(canonical_leader, [])
+            members_list = roster or room_members.get(canonical_leader, [])
+            # 진도 공지만 하고 인증은 안 하는(또는 다른 방에서 하는) 운영자가 있다.
+            # 인증이 있으면 이미 users에 있으므로, 여기서 걸리는 건 공지 전용 운영자다.
+            # leader는 clean_leader_name을 거쳐 성이 빠져 있으므로 같은 기준으로 비교한다.
+            operators = {
+                clean_leader_name(name)
+                for name in (leader, canonical_leader) if name
+            }
+            global_excluded = edu_config.get("excluded_members", [])
             for member in members_list:
                 if member not in users:
+                    if clean_leader_name(member) in operators:
+                        logger.info("공지 전용 운영자 제외: %s", member)
+                        continue
+                    if any(keyword in member for keyword in global_excluded):
+                        logger.info("제외 대상 멤버 미주입: %s", member)
+                        continue
                     if track_mode == "dual":
                         users[member] = {"dates_old": set(), "dates_new": set(), "emoji": ""}
                     else:
@@ -488,6 +512,7 @@ class HoneyBibleHandler(BaseHTTPRequestHandler):
                 "schedule_type": schedule_type,
                 "part": part,
                 "leader": clean_leader_name(canonical_leader) if canonical_leader else "",
+                "room_members": ",".join(members_list),
             }
             xlsx_bytes = build_output_xlsx(users, track_mode=track_mode, meta=meta)
             image_bytes = build_output_image(users, track_mode=track_mode, theme=theme)

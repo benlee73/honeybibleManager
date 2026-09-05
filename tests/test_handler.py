@@ -1076,3 +1076,132 @@ class TestDetectTrackModeByRatio:
         rows = [("리더", "헷갈릴 수 있는 내용을 다시 안내드립니다"), ("u", "6/8 🍉")]
 
         assert _detect_track_mode(rows) == "dual"
+
+
+class TestExtractRoomRoster:
+    """초대·입퇴장 시스템 메시지로 방 멤버 명단을 만든다."""
+
+    def _roster(self, text):
+        from app.analyzer import normalize_user_name
+        from app.file_processor import extract_room_roster
+
+        return extract_room_roster(text, normalize_user_name)
+
+    def test_여러명_초대__전원_포함(self):
+        text = "김태환님이 광천94 박명철님, 광천92 황지운님과 광천93 강민지님을 초대했습니다."
+
+        assert self._roster(text) == ["강민지", "김태환", "박명철", "황지운"]
+
+    def test_방장__명단에_포함(self):
+        text = "장지윤님이 방장이 되어 팀채팅을 시작했어요!"
+
+        assert self._roster(text) == ["장지윤"]
+
+    def test_나간_사람__명단에서_제외(self):
+        text = (
+            "김태환님이 박명철님과 황지운님을 초대했습니다.\n"
+            "황지운님이 나갔습니다."
+        )
+
+        assert self._roster(text) == ["김태환", "박명철"]
+
+    def test_내보낸_사람__명단에서_제외(self):
+        text = (
+            "김태환님이 박명철님과 황지운님을 초대했습니다.\n"
+            "김태환님이 황지운님을 내보냈습니다."
+        )
+
+        assert self._roster(text) == ["김태환", "박명철"]
+
+    def test_들어온_사람__명단에_포함(self):
+        text = "김태환님이 방장이 되어 팀채팅을 시작했어요!\n박명철님이 들어왔습니다."
+
+        assert self._roster(text) == ["김태환", "박명철"]
+
+    def test_나갔다는_표현이_담긴_일반_메시지__오탐_없음(self):
+        # "님이 나갔습니다"가 아닌 사용자 대화는 퇴장으로 보지 않는다
+        text = (
+            "김태환님이 박명철님을 초대했습니다.\n"
+            "누가 (알 수 없음)으로 꿀성경 방을 나갔습니다. 어떻게 해야할까요?"
+        )
+
+        assert self._roster(text) == ["김태환", "박명철"]
+
+    def test_시스템_메시지_없음__빈_명단(self):
+        assert self._roster("안녕하세요\n2/2 🍉") == []
+
+    def test_빈_입력__빈_명단(self):
+        assert self._roster("") == []
+
+
+class TestOperatorExcludedFromRoster:
+    """진도 공지만 하는 방장은 미참여 멤버로 추가하지 않는다."""
+
+    _CSV = (
+        "Date,User,Message\n"
+        "2026-06-07,박방장,박방장님이 김참여님과 이미참님을 초대했습니다.\n"
+        "2026-06-07,박방장,꿀성경 진행 방식 안내\n"
+        "2026-06-08,김참여,6/8 🍉\n"
+    ).encode("utf-8")
+
+    def _preview_names(self, test_server, csv_data):
+        body, content_type = _make_analyze_payload(
+            "chat.csv", csv_data, fields={"part": "2"},
+        )
+        req = Request(
+            f"{test_server}/analyze",
+            data=body,
+            headers={"Content-Type": content_type},
+            method="POST",
+        )
+        resp = urlopen(req)
+        assert resp.status == 200
+        data = json.loads(resp.read())
+        return [row[0] for row in data["preview"]["rows"]]
+
+    def test_인증_없는_방장은_빠지고_미참여자는_남는다(self, test_server):
+        names = self._preview_names(test_server, self._CSV)
+
+        assert "김참여" in names
+        assert "이미참" in names
+        assert "박방장" not in names
+
+    def test_방장이_인증하면__명단에_포함(self, test_server):
+        csv_data = self._CSV + "2026-06-09,박방장,6/9 🍇\n".encode("utf-8")
+
+        names = self._preview_names(test_server, csv_data)
+
+        assert "박방장" in names
+
+
+class TestExcludedMembersNotInjected:
+    """excluded_members는 미참여 멤버 주입에도 적용된다."""
+
+    _CSV = (
+        "Date,User,Message\n"
+        "2026-06-07,박방장,박방장님이 김참여님과 최지혁님을 초대했습니다.\n"
+        "2026-06-07,박방장,꿀성경 진행 방식 안내\n"
+        "2026-06-08,김참여,6/8 🍉\n"
+        "2026-06-09,박방장,6/9 🍇\n"
+    ).encode("utf-8")
+
+    def test_제외_대상은_빈_날짜로도_추가되지_않는다(self, test_server):
+        edu_config = {"excluded_members": ["지혁"], "name_aliases": {}, "room_members": {}}
+
+        with patch("app.handler.load_education_config", return_value=edu_config):
+            body, content_type = _make_analyze_payload(
+                "chat.csv", self._CSV, fields={"part": "2"},
+            )
+            req = Request(
+                f"{test_server}/analyze",
+                data=body,
+                headers={"Content-Type": content_type},
+                method="POST",
+            )
+            resp = urlopen(req)
+            data = json.loads(resp.read())
+
+        names = [row[0] for row in data["preview"]["rows"]]
+
+        assert "김참여" in names
+        assert "최지혁" not in names
