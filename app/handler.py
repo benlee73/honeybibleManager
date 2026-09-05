@@ -10,6 +10,7 @@ from urllib.parse import unquote
 
 from app.analyzer import (
     analyze_chat,
+    apply_message_corrections,
     build_output_xlsx,
     build_preview_data,
     decode_payload,
@@ -457,10 +458,14 @@ class HoneyBibleHandler(BaseHTTPRequestHandler):
 
             leader = extract_leader(rows)
 
+            edu_config = load_education_config()
+            rows = apply_message_corrections(
+                rows, room_name, edu_config.get("message_corrections", []),
+            )
+
             users = analyze_chat(rows=rows, track_mode=track_mode, part=part)
 
             # 이름 통일: 약칭 → 본명 변환 (모든 참여자에 적용)
-            edu_config = load_education_config()
             name_aliases = edu_config.get("name_aliases", {})
             if name_aliases:
                 users = {resolve_alias(u, name_aliases): v for u, v in users.items()}

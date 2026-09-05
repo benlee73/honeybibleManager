@@ -1,5 +1,6 @@
 import csv
 import io
+import unicodedata
 
 from app.date_parser import DATE_TIME_PATTERN, has_leading_tilde_catchup, parse_dates
 from app.emoji import extract_trailing_emoji, is_emoji_component, normalize_emoji
@@ -12,6 +13,7 @@ from app.schedule import (
     detect_schedule,
     get_schedule_start,
     resolve_part,
+    without_future,
 )
 
 # 출력 함수를 output_builder에서 re-export (하위호환)
@@ -207,6 +209,36 @@ def parse_csv_rows(csv_text):
     return rows
 
 
+def apply_message_corrections(rows, room_name, corrections):
+    """설정에 등록된 오타 교정을 메시지에 적용한다.
+
+    카톡방에서 이미 지나간 인증의 오타는 본인이 재인증하지 않으면 고칠 방법이
+    없어서, 방·사람·문자열 3중으로 좁힌 교정 목록을 설정에 둔다.
+    """
+    if not corrections:
+        return rows
+
+    room = unicodedata.normalize("NFC", room_name or "")
+    applied = []
+    corrected = []
+    for user, message in rows:
+        for rule in corrections:
+            find = rule.get("find")
+            if not find or find not in message:
+                continue
+            if rule.get("room") and unicodedata.normalize("NFC", rule["room"]) not in room:
+                continue
+            if rule.get("user") and rule["user"] not in user:
+                continue
+            message = message.replace(find, rule.get("replace", ""))
+            applied.append((user, find, rule.get("replace", "")))
+        corrected.append((user, message))
+
+    for user, find, replace in applied:
+        logger.info("메시지 교정: %s — %r → %r", user, find, replace)
+    return corrected
+
+
 def analyze_chat(csv_text=None, track_mode="single", rows=None, part=None):
     if rows is None:
         rows = parse_csv_rows(csv_text or "")
@@ -316,6 +348,9 @@ def analyze_chat(csv_text=None, track_mode="single", rows=None, part=None):
         schedule_new = NT_PART_DATES[part - 1]
         schedule_start_old = get_schedule_start(schedule_old)
         schedule_start_new = get_schedule_start(schedule_new)
+        # 시작일 조회는 원본 진도표로 끝났으므로 이후 판정은 미래 날짜를 뺀 집합으로 한다
+        schedule_old = without_future(schedule_old)
+        schedule_new = without_future(schedule_new)
         logger.info(
             "듀얼 모드 — PART %d (구약 %d개, 신약 %d개)",
             part, len(schedule_old), len(schedule_new),
@@ -323,6 +358,8 @@ def analyze_chat(csv_text=None, track_mode="single", rows=None, part=None):
     else:
         schedule = detect_schedule(rows, part=part)
         schedule_start = get_schedule_start(schedule) if schedule is not None else None
+        # 시작일 조회는 원본 진도표로 끝났으므로 이후 판정은 미래 날짜를 뺀 집합으로 한다
+        schedule = without_future(schedule)
         if schedule is not None:
             logger.info("싱글 모드 — 진도표 감지됨 (유효 날짜 %d개)", len(schedule))
         else:

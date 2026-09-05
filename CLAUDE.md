@@ -68,6 +68,12 @@ education_config.json  # 교육국 멤버 분류 설정 (신약일독/미참여)
   "excluded_members": ["지혁"],
   "dual_excluded_members": ["이희준"],
   "name_aliases": {"태환": "김태환", ...},
+  "leader_overrides": [
+    {"detected": "김태환", "markers": ["이창원", "최은규"], "actual": "이희준"}
+  ],
+  "message_corrections": [
+    {"room": "🍯 2026 성경일독 PART 2", "user": "유재희", "find": "9/11-13", "replace": "6/11-13"}
+  ],
   "room_members": {
     "김태환": ["김치훈", "원유관", ...]
   }
@@ -75,6 +81,8 @@ education_config.json  # 교육국 멤버 분류 설정 (신약일독/미참여)
 ```
 
 - `room_members`: 방장(leader) 이름을 키로 방별 전체 멤버 목록을 등록한다. 분석 후 등록된 멤버 중 결과에 누락된 인원을 빈 날짜로 추가하여 미참여 멤버도 진도표에 포함시킨다.
+- `leader_overrides`: 방장이 잘못 감지될 때 참여자(marker)로 교정한다. 부방장이 안내를 올린 방 등에서 필요하다.
+- `message_corrections`: 지나간 인증의 오타를 교정한다(`analyzer.apply_message_corrections`). 카톡방의 과거 메시지는 본인이 재인증하지 않으면 고칠 수 없어서, `room`·`user`·`find` 3중으로 좁힌 목록을 둔다. 진도표 필터보다 먼저 적용된다.
 
 ### XLSX 메타데이터 시트
 
@@ -92,6 +100,7 @@ education_config.json  # 교육국 멤버 분류 설정 (신약일독/미참여)
 ## 분석 규칙 요약
 
 - 한 메시지에서 추출된 날짜가 14개(`MAX_DATES_PER_MESSAGE`)를 초과하면 공지성 메시지로 간주하여 스킵한다.
+- 오늘(KST) 이후 날짜는 집계에서 제외한다(`schedule.without_future`). 아직 오지 않은 날의 분량을 읽었을 수는 없으므로 오타로 본다. 진도표 상수 자체는 그대로 두고 판정용 집합만 걸러서, `get_schedule_start`·`detect_schedule_type`의 identity 조회가 깨지지 않게 한다.
 - 진도표 기반 날짜 필터링: 일요일 및 파트 간 쉬는 기간의 날짜는 결과에서 제외한다.
   - 성경일독: 월~토 읽기 (일요일 쉼), 신약일독: 월~금 읽기 (토·일요일 쉼)
   - Dual 모드: 구약 → 성경일독, 신약 → 신약일독 진도표 자동 적용

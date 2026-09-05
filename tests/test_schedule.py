@@ -18,6 +18,7 @@ from app.schedule import (
     get_schedule_start,
     resolve_part,
     today_kst,
+    without_future,
 )
 
 
@@ -311,3 +312,34 @@ class TestGetScheduleStart:
 
     def test_None_입력(self):
         assert get_schedule_start(None) is None
+
+
+class TestWithoutFuture:
+    def test_오늘_이후_날짜_제외(self):
+        schedule = frozenset({"6/8", "9/4", "9/5", "9/11", "9/12"})
+
+        result = without_future(schedule, today=datetime.date(2026, 9, 5))
+
+        assert result == frozenset({"6/8", "9/4", "9/5"})
+
+    def test_오늘_날짜는_포함(self):
+        result = without_future(frozenset({"9/5"}), today=datetime.date(2026, 9, 5))
+
+        assert result == frozenset({"9/5"})
+
+    def test_전부_과거__그대로_유지(self):
+        schedule = frozenset({"2/2", "3/15", "5/30"})
+
+        result = without_future(schedule, today=datetime.date(2026, 9, 5))
+
+        assert result == schedule
+
+    def test_None__None_반환(self):
+        assert without_future(None, today=datetime.date(2026, 9, 5)) is None
+
+    def test_진도표_상수는_변경되지_않음(self):
+        before = set(BIBLE_PART_DATES[1])
+
+        without_future(BIBLE_PART_DATES[1], today=datetime.date(2026, 9, 5))
+
+        assert set(BIBLE_PART_DATES[1]) == before

@@ -1,10 +1,13 @@
 import csv
+import datetime
 import io
+from unittest.mock import patch
 
 import pytest
 
 from app.analyzer import (
     analyze_chat,
+    apply_message_corrections,
     build_dual_preview_data,
     build_output_csv,
     build_output_xlsx,
@@ -1508,3 +1511,76 @@ class TestResolveUnknownUsers:
         ]
         result = resolve_unknown_users(rows)
         assert result[0] == ("(알수없음)", "2/2 🎈")
+
+
+class TestApplyMessageCorrections:
+    """설정 기반 메시지 오타 교정."""
+
+    _RULE = {
+        "room": "🍯 2026 성경일독 PART 2",
+        "user": "유재희",
+        "find": "9/11-13",
+        "replace": "6/11-13",
+    }
+
+    def test_방_사람_문자열_모두_일치__교정_적용(self):
+        rows = [("96 유재희", "9/11-13 🍚")]
+
+        result = apply_message_corrections(rows, "🍯 2026 성경일독 PART 2", [self._RULE])
+
+        assert result == [("96 유재희", "6/11-13 🍚")]
+
+    def test_다른_방__교정_미적용(self):
+        rows = [("96 유재희", "9/11-13 🍚")]
+
+        result = apply_message_corrections(rows, "🍯 2026 성경일독 행정국", [self._RULE])
+
+        assert result == rows
+
+    def test_다른_사람__교정_미적용(self):
+        rows = [("95 전주호", "9/11-13 🍚")]
+
+        result = apply_message_corrections(rows, "🍯 2026 성경일독 PART 2", [self._RULE])
+
+        assert result == rows
+
+    def test_다른_메시지__교정_미적용(self):
+        rows = [("96 유재희", "9/4 🍚")]
+
+        result = apply_message_corrections(rows, "🍯 2026 성경일독 PART 2", [self._RULE])
+
+        assert result == rows
+
+    def test_교정_목록_비어있음__원본_그대로(self):
+        rows = [("96 유재희", "9/11-13 🍚")]
+
+        assert apply_message_corrections(rows, "아무방", []) is rows
+
+
+class TestAnalyzeChatFutureDates:
+    """오늘 이후 날짜는 오타로 보고 집계에서 제외한다."""
+
+    def _analyze_on(self, rows, today):
+        with patch("app.schedule.today_kst", return_value=today):
+            return analyze_chat(rows=rows, part=2)
+
+    def test_미래_날짜__집계_제외(self):
+        rows = [("u", "6/8 🍚"), ("u", "9/11 🍚")]
+
+        result = self._analyze_on(rows, datetime.date(2026, 9, 5))
+
+        assert result["u"]["dates"] == {"6/8"}
+
+    def test_오늘_날짜__집계_포함(self):
+        rows = [("u", "9/5 🍚")]
+
+        result = self._analyze_on(rows, datetime.date(2026, 9, 5))
+
+        assert result["u"]["dates"] == {"9/5"}
+
+    def test_과거_날짜만__전부_집계(self):
+        rows = [("u", "6/8 🍚"), ("u", "6/9 🍚")]
+
+        result = self._analyze_on(rows, datetime.date(2026, 9, 5))
+
+        assert result["u"]["dates"] == {"6/8", "6/9"}

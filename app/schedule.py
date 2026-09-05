@@ -227,6 +227,30 @@ def get_schedule_start(schedule):
     return _SCHEDULE_START_MAP.get(schedule)
 
 
+def without_future(schedule, today=None):
+    """진도표에서 오늘 이후 날짜를 제외한 집합을 반환한다.
+
+    아직 오지 않은 날의 분량을 읽었을 수는 없으므로, 미래 날짜 인증은 오타로 본다.
+    (예: 6월에 "9/11-13"으로 잘못 올린 인증)
+    반환값은 진도표 상수와 다른 객체이므로 get_schedule_start 같은 identity 조회에
+    쓰지 말고, 날짜 포함 여부 판정에만 쓴다.
+    """
+    if schedule is None:
+        return None
+    if today is None:
+        today = today_kst()
+    limit = (today.month, today.day)
+    valid = set()
+    for date_value in schedule:
+        try:
+            month, day = date_value.split("/")
+            if (int(month), int(day)) <= limit:
+                valid.add(date_value)
+        except (ValueError, TypeError):
+            continue
+    return frozenset(valid)
+
+
 def get_part_schedule(track, part):
     """track('bible'|'nt') × part(1|2|3) 진도표 반환."""
     if part is None or not (1 <= part <= 3):
