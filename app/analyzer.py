@@ -175,6 +175,15 @@ def _is_too_many_dates(message, dates):
     return len(dates) > limit
 
 
+# 진도 공지 머리표. 방장이 매일 올리는 안내라 인증이 아니다.
+_NOTICE_MARK = "\U0001F5D3"  # 🗓
+
+
+def is_notice(message):
+    """진도 공지 메시지인지. 방장이 인증도 하는 방에서 공지가 인증으로 잡히는 것을 막는다."""
+    return (message or "").lstrip().startswith(_NOTICE_MARK)
+
+
 def extract_tracks(message):
     tracks = set()
     if "구약" in message:
@@ -287,6 +296,8 @@ def analyze_chat(csv_text=None, track_mode="single", rows=None, part=None):
     skip_no_emoji = 0
 
     for user, message in rows:
+        if is_notice(message):
+            continue
         dates = parse_dates(message)
         if not dates:
             skip_no_date += 1
@@ -376,6 +387,9 @@ def analyze_chat(csv_text=None, track_mode="single", rows=None, part=None):
     prev_matched_user = None
 
     for user, message in rows:
+        if is_notice(message):
+            prev_matched_user = None
+            continue
         assigned = user_emojis.get(user)
         if not assigned:
             skip_no_assigned += 1

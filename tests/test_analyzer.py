@@ -1584,3 +1584,51 @@ class TestAnalyzeChatFutureDates:
         result = self._analyze_on(rows, datetime.date(2026, 9, 5))
 
         assert result["u"]["dates"] == {"6/8", "6/9"}
+
+
+class TestNoticeNotCountedAsCertification:
+    """방장의 진도 공지는 본인 인증으로 집계하지 않는다."""
+
+    def test_본인_인증_직후_공지__인증으로_집계되지_않음(self):
+        # 연속 메시지 이모티콘 생략 허용 규칙에 공지가 걸리던 버그
+        rows = [
+            ("방장", "6/8 🥑"),
+            ("방장", "🗓️ 6/9\n예레미야 1-5"),
+        ]
+
+        result = analyze_chat(rows=rows, part=2)
+
+        assert result["방장"]["dates"] == {"6/8"}
+
+    def test_공지_끝의_이모지가_줄마다_붙어도__집계되지_않음(self):
+        # 멀티라인 분리 시 끝 이모지가 공지 줄에 전파되던 버그
+        rows = [
+            ("방장", "6/8 🙌"),
+            ("방장", "🗓️ 6/9\n예레미야 1-5\n\n다들 화이팅! 🙌"),
+        ]
+
+        result = analyze_chat(rows=rows, part=2)
+
+        assert result["방장"]["dates"] == {"6/8"}
+
+    def test_공지가_아닌_일반_인증은_그대로_집계(self):
+        rows = [("참여자", "6/8 🍉"), ("참여자", "6/9 🍉")]
+
+        result = analyze_chat(rows=rows, part=2)
+
+        assert result["참여자"]["dates"] == {"6/8", "6/9"}
+
+    def test_책_이름이_들어간_인증__집계됨(self):
+        # 공지 머리표가 없으면 책 이름이 있어도 인증이다
+        rows = [("홍지혜", "6/8 야고보서 1💌"), ("홍지혜", "6/9 야고보서 2💌")]
+
+        result = analyze_chat(rows=rows, part=2)
+
+        assert result["홍지혜"]["dates"] == {"6/8", "6/9"}
+
+    def test_이모지가_첫줄에만_있는_멀티라인_인증__두_줄_모두_집계(self):
+        rows = [("이준명", "6/8 구약 신약 🦭\n6/9 구약")]
+
+        result = analyze_chat(rows=rows, track_mode="dual", part=2)
+
+        assert result["이준명"]["dates_old"] == {"6/8", "6/9"}
