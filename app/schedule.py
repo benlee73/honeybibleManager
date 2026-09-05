@@ -5,6 +5,15 @@ from app.logger import get_logger
 
 logger = get_logger("schedule")
 
+# 서버는 UTC로 도는데 인증은 한국 시간 기준이다. UTC를 그대로 쓰면 한국에서
+# 밤 9시 이후 올린 인증이 하루 뒤 날짜로 보인다.
+KST = datetime.timezone(datetime.timedelta(hours=9))
+
+
+def today_kst():
+    """한국 시간 기준 오늘 날짜."""
+    return datetime.datetime.now(KST).date()
+
 # 성경일독 파트별 시작~종료
 _BIBLE_RANGES = [
     (datetime.date(2026, 2, 2), datetime.date(2026, 5, 30)),
@@ -95,7 +104,7 @@ def current_part(today=None):
     - 첫 파트 시작 전이면 PART 1
     """
     if today is None:
-        today = datetime.date.today()
+        today = today_kst()
     result = 1
     for idx, (start, end) in enumerate(_BIBLE_RANGES):
         if today < start:

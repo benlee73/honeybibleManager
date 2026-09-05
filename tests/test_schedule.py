@@ -10,12 +10,14 @@ from app.schedule import (
     _BIBLE_RANGES,
     _NT_RANGES,
     _generate_dates,
+    KST,
     current_part,
     detect_schedule,
     get_part_books,
     get_part_schedule,
     get_schedule_start,
     resolve_part,
+    today_kst,
 )
 
 
@@ -199,6 +201,19 @@ class TestCurrentPart:
 
     def test_전체_종료_후__파트3_유지(self):
         assert current_part(datetime.date(2026, 12, 31)) == 3
+
+
+class TestTodayKst:
+    def test_UTC_밤_시간대__한국은_다음날(self):
+        # UTC 2026-09-05 15:10 = KST 2026-09-06 00:10
+        utc_now = datetime.datetime(2026, 9, 5, 15, 10, tzinfo=datetime.timezone.utc)
+
+        assert utc_now.astimezone(KST).date() == datetime.date(2026, 9, 6)
+
+    def test_오늘_날짜__KST_기준(self):
+        expected = datetime.datetime.now(KST).date()
+
+        assert today_kst() == expected
 
 
 class TestResolvePart:
