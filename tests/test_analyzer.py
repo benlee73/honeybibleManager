@@ -1682,3 +1682,42 @@ class TestMessageCorrectionNth:
 
         assert result[0] == ("박다균", "7/6🌱")
         assert result[2] == ("강진서", "7/7🌱")
+
+
+class TestAnnouncementNotUsedForEmoji:
+    """규칙 안내의 예시 이모티콘이 대표 이모티콘으로 잡히지 않는다."""
+
+    _ANNOUNCEMENT = (
+        "✔️ 2026 꿀성경 진행 방식 안내\n"
+        "① 매일 인증 방법\n"
+        "- 타인과 중복되지 않는 이모티콘을 지정하여 사용\n"
+        "- 예시: 2/12🐷"
+    )
+
+    def test_안내의_예시_이모티콘은_후보에서_제외(self):
+        # 실제 인증이 적은 방장이 예시 이모티콘을 배정받던 버그
+        rows = [
+            ("방장", self._ANNOUNCEMENT),
+            ("방장", self._ANNOUNCEMENT),
+            ("방장", "6/8-9 🫧"),
+            ("방장", "6/10 🫧"),
+        ]
+
+        result = analyze_chat(rows=rows, part=2)
+
+        assert result["방장"]["emoji"] == "🫧"
+        assert result["방장"]["dates"] == {"6/8", "6/9", "6/10"}
+
+    def test_안내_메시지의_날짜는_집계되지_않음(self):
+        rows = [("방장", self._ANNOUNCEMENT), ("방장", "6/8 🫧")]
+
+        result = analyze_chat(rows=rows, part=2)
+
+        assert result["방장"]["dates"] == {"6/8"}
+
+    def test_안내가_없으면_기존과_동일(self):
+        rows = [("참여자", "6/8 🍉"), ("참여자", "6/9 🍉")]
+
+        result = analyze_chat(rows=rows, part=2)
+
+        assert result["참여자"]["emoji"] == "🍉"

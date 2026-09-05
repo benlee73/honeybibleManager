@@ -179,6 +179,16 @@ def _is_too_many_dates(message, dates):
 _NOTICE_MARK = "\U0001F5D3"  # 🗓
 
 
+# 규칙 안내 메시지. "예시: 2/12🐷" 줄이 멀티라인 분리 후 인증처럼 취급되어
+# 방장의 대표 이모티콘이 예시 이모티콘으로 잡히는 문제가 있었다.
+_ANNOUNCEMENT_MARK = "꿀성경 진행 방식 안내"
+
+
+def is_announcement(message):
+    """방 규칙 안내 메시지인지."""
+    return _ANNOUNCEMENT_MARK in (message or "")
+
+
 def is_notice(message):
     """진도 공지 메시지인지. 방장이 인증도 하는 방에서 공지가 인증으로 잡히는 것을 막는다."""
     return (message or "").lstrip().startswith(_NOTICE_MARK)
@@ -267,6 +277,9 @@ def analyze_chat(csv_text=None, track_mode="single", rows=None, part=None):
 
     # (알 수 없음) 사용자 이모티콘 기반 매칭
     rows = resolve_unknown_users(rows)
+
+    # 규칙 안내는 멀티라인 분리 전에 걸러야 한다 (분리 후에는 표식이 사라진다)
+    rows = [(user, message) for user, message in rows if not is_announcement(message)]
 
     # 멀티라인 메시지를 줄별로 분리 (각 줄이 독립적인 날짜+트랙 인증인 경우 대응)
     # 전체 메시지에 이모지가 있으면 이모지 없는 줄에도 붙여준다
