@@ -29,11 +29,20 @@ _NT_RANGES = [
 ]
 
 
+# 파트 진행 중 진도 공지가 없었던 쉬는 날. 두 트랙 공통이다.
+# (2026 PART 2: 8/13~8/15 — 9개 방 전부 이 사흘만 공지가 없었다)
+_BREAK_DATES = frozenset({
+    datetime.date(2026, 8, 13),
+    datetime.date(2026, 8, 14),
+    datetime.date(2026, 8, 15),
+})
+
+
 def _generate_dates_for_range(start, end, exclude_weekdays):
     dates = set()
     current = start
     while current <= end:
-        if current.weekday() not in exclude_weekdays:
+        if current.weekday() not in exclude_weekdays and current not in _BREAK_DATES:
             dates.add(f"{current.month}/{current.day}")
         current += datetime.timedelta(days=1)
     return frozenset(dates)

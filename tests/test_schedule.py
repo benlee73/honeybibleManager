@@ -55,6 +55,17 @@ class TestGenerateDates:
         assert "10/1" not in BIBLE_DATES
         assert "10/4" not in BIBLE_DATES
 
+    def test_진행중_쉬는날__미포함(self):
+        # 2026 PART 2: 8/13~8/15은 진도 공지가 없던 쉬는 기간
+        for date_value in ("8/13", "8/14", "8/15"):
+            assert date_value not in BIBLE_PART_DATES[1]
+            assert date_value not in NT_PART_DATES[1]
+
+    def test_쉬는날_전후__포함(self):
+        # 8/12(수)와 8/17(월)은 정상 진도일
+        assert "8/12" in BIBLE_PART_DATES[1]
+        assert "8/17" in BIBLE_PART_DATES[1]
+
     def test_시작일_포함(self):
         # 2026-02-02 = 월요일
         assert "2/2" in BIBLE_DATES
