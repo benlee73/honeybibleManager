@@ -86,6 +86,13 @@
       "find": "6/26 구약",
       "replace": "6/27 구약",
       "nth": 2
+    },
+    {
+      "room": "📖2026 신약일독_Part2",
+      "user": "김재만",
+      "find": "6/12",
+      "replace": "6/15",
+      "nth": 2
     }
   ],
   "room_members": {
