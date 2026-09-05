@@ -1632,3 +1632,53 @@ class TestNoticeNotCountedAsCertification:
         result = analyze_chat(rows=rows, track_mode="dual", part=2)
 
         assert result["이준명"]["dates_old"] == {"6/8", "6/9"}
+
+
+class TestMessageCorrectionNth:
+    """같은 문자열이 여러 번 나올 때 n번째만 교정한다."""
+
+    _RULE = {
+        "room": "신약일독 파트 2",
+        "user": "강진서",
+        "find": "7/6🌱",
+        "replace": "7/7🌱",
+        "nth": 2,
+    }
+
+    def test_두번째_일치만_교정(self):
+        rows = [
+            ("강진서", "7/6🌱"),
+            ("박다균", "7/6🧋"),
+            ("강진서", "7/6🌱"),
+        ]
+
+        result = apply_message_corrections(rows, "신약일독 파트 2", [self._RULE])
+
+        assert result == [("강진서", "7/6🌱"), ("박다균", "7/6🧋"), ("강진서", "7/7🌱")]
+
+    def test_일치가_한_번뿐이면__교정_안_함(self):
+        rows = [("강진서", "7/6🌱")]
+
+        result = apply_message_corrections(rows, "신약일독 파트 2", [self._RULE])
+
+        assert result == rows
+
+    def test_nth_없으면__모든_일치_교정(self):
+        rule = {k: v for k, v in self._RULE.items() if k != "nth"}
+        rows = [("강진서", "7/6🌱"), ("강진서", "7/6🌱")]
+
+        result = apply_message_corrections(rows, "신약일독 파트 2", [rule])
+
+        assert result == [("강진서", "7/7🌱"), ("강진서", "7/7🌱")]
+
+    def test_다른_사람_메시지는_순번에_포함되지_않음(self):
+        rows = [
+            ("박다균", "7/6🌱"),
+            ("강진서", "7/6🌱"),
+            ("강진서", "7/6🌱"),
+        ]
+
+        result = apply_message_corrections(rows, "신약일독 파트 2", [self._RULE])
+
+        assert result[0] == ("박다균", "7/6🌱")
+        assert result[2] == ("강진서", "7/7🌱")

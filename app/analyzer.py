@@ -223,6 +223,10 @@ def apply_message_corrections(rows, room_name, corrections):
 
     카톡방에서 이미 지나간 인증의 오타는 본인이 재인증하지 않으면 고칠 방법이
     없어서, 방·사람·문자열 3중으로 좁힌 교정 목록을 설정에 둔다.
+
+    같은 사람이 같은 문자열을 여러 번 보냈고 그중 하나만 오타인 경우
+    (예: 7/6에 올린 정상 인증과 7/7에 잘못 올린 "7/6🌱"), 규칙에 nth를 주면
+    n번째로 일치하는 메시지에만 적용한다.
     """
     if not corrections:
         return rows
@@ -230,14 +234,20 @@ def apply_message_corrections(rows, room_name, corrections):
     room = unicodedata.normalize("NFC", room_name or "")
     applied = []
     corrected = []
+    match_counts = {}
     for user, message in rows:
-        for rule in corrections:
+        for index, rule in enumerate(corrections):
             find = rule.get("find")
             if not find or find not in message:
                 continue
             if rule.get("room") and unicodedata.normalize("NFC", rule["room"]) not in room:
                 continue
             if rule.get("user") and rule["user"] not in user:
+                continue
+            seen = match_counts.get(index, 0) + 1
+            match_counts[index] = seen
+            nth = rule.get("nth")
+            if nth is not None and seen != nth:
                 continue
             message = message.replace(find, rule.get("replace", ""))
             applied.append((user, find, rule.get("replace", "")))
