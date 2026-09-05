@@ -28,6 +28,7 @@ from app.handler import (
     extract_multipart_field,
     extract_multipart_file,
 )
+from app.schedule import current_part
 
 
 def _make_multipart_payload(field_name, filename, content, boundary="testboundary"):
@@ -449,7 +450,7 @@ class TestDetectScheduleType:
 
     def test_신약일독_키워드__nt_반환(self):
         rows = [("user1", "마태복음 1장"), ("user2", "마가복음 2장")]
-        assert _detect_schedule_type(rows, "일반방", "single") == "nt"
+        assert _detect_schedule_type(rows, "일반방", "single", part=1) == "nt"
 
     def test_메시지에_교육국_포함__방이름_아니면_무시(self):
         # 방이름에 "교육국"이 없으면 메시지 내용은 무시 → bible로 분류
@@ -462,7 +463,12 @@ class TestDetectScheduleType:
 
 
 def _make_analyze_payload(filename, file_content, fields=None, boundary="testboundary"):
-    """POST /analyze용 multipart 페이로드를 생성한다."""
+    """POST /analyze용 multipart 페이로드를 생성한다.
+
+    샘플 파일이 모두 PART 1 기간 데이터이므로 part를 1로 고정한다.
+    (미지정 시 서버는 오늘 날짜 기준 파트를 적용한다)
+    """
+    fields = {"part": "1", **(fields or {})}
     body = (
         f"--{boundary}\r\n"
         f'Content-Disposition: form-data; name="file"; filename="{filename}"\r\n'
@@ -985,3 +991,88 @@ class TestRoomMembers:
         preview_rows = data["preview"]["rows"]
         # 메시지를 보낸 사용자만 포함 (방장 공지 제외)
         assert len(preview_rows) >= 1
+
+
+class TestAnalyzePartField:
+    """POST /analyze의 part 필드 동작."""
+
+    # PART 1(2/2~5/30)과 PART 2(6/8~9/26) 인증이 섞인 방
+    _MIXED_CSV = (
+        "Date,User,Message\n"
+        "2026-02-10,홍길동,꿀성경 진행 방식 안내\n"
+        "2026-02-10,김철수,2/10 ❤️\n"
+        "2026-02-11,김철수,2/11 ❤️\n"
+        "2026-06-08,김철수,6/8 ❤️\n"
+        "2026-06-09,김철수,6/9 ❤️\n"
+        "2026-06-10,김철수,6/10 ❤️\n"
+    ).encode("utf-8")
+
+    def _analyze(self, test_server, fields):
+        body, content_type = _make_analyze_payload(
+            "chat.csv", self._MIXED_CSV, fields=fields,
+        )
+        req = Request(
+            f"{test_server}/analyze",
+            data=body,
+            headers={"Content-Type": content_type},
+            method="POST",
+        )
+        resp = urlopen(req)
+        assert resp.status == 200
+        return json.loads(resp.read())
+
+    def test_part_1_지정__파트1_날짜만_집계(self, test_server):
+        data = self._analyze(test_server, {"part": "1"})
+
+        headers = data["preview"]["headers"]
+
+        assert "2/10" in headers
+        assert "6/8" not in headers
+
+    def test_part_2_지정__파트2_날짜만_집계(self, test_server):
+        data = self._analyze(test_server, {"part": "2"})
+
+        headers = data["preview"]["headers"]
+
+        assert "6/8" in headers
+        assert "2/10" not in headers
+
+    def test_part_미지정__오늘_기준_파트_적용(self, test_server):
+        explicit = self._analyze(test_server, {"part": str(current_part())})
+
+        omitted = self._analyze(test_server, {"part": ""})
+
+        assert omitted["preview"]["headers"] == explicit["preview"]["headers"]
+
+    def test_잘못된_part_값__오늘_기준_파트로_폴백(self, test_server):
+        explicit = self._analyze(test_server, {"part": str(current_part())})
+
+        invalid = self._analyze(test_server, {"part": "99"})
+
+        assert invalid["preview"]["headers"] == explicit["preview"]["headers"]
+
+
+class TestDetectTrackModeByRatio:
+    """공지 문구 없이 인증 형태로 투트랙 방을 판별한다."""
+
+    def test_구약_신약_인증_비율_높음__dual(self):
+        rows = [("u", f"6/{n} 구약 신약 ✨") for n in range(8, 28)]
+
+        assert _detect_track_mode(rows) == "dual"
+
+    def test_일반_방에_구약_언급_소수__single(self):
+        rows = [("u", f"6/{n} 🍉") for n in range(8, 28)]
+        rows.append(("u", "6/28 구약 다 읽었어요 🍉"))
+
+        assert _detect_track_mode(rows) == "single"
+
+    def test_구약_신약_인증이_적으면__single(self):
+        # 절대 건수가 적으면(<10) 비율이 높아도 dual로 보지 않는다
+        rows = [("u", f"6/{n} 구약 신약 ✨") for n in range(8, 13)]
+
+        assert _detect_track_mode(rows) == "single"
+
+    def test_공지_문구_있으면__비율_무관하게_dual(self):
+        rows = [("리더", "헷갈릴 수 있는 내용을 다시 안내드립니다"), ("u", "6/8 🍉")]
+
+        assert _detect_track_mode(rows) == "dual"

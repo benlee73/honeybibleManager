@@ -26,6 +26,12 @@ _ZIP_FILENAME_RE = re.compile(
 _LEADER_KEYWORD = "꿀성경 진행 방식 안내"
 _DUAL_MARKER = "헷갈릴 수 있는 내용을 다시 안내드립니다"
 
+# 투트랙 방은 인증마다 "구약"/"신약"을 적는다. 공지 문구는 기수마다 바뀌므로
+# 인증 형태 자체를 신호로 쓴다. 실측: 투트랙 방 74.8%, 일반 방 0.2% 이하.
+_DUAL_TRACK_WORDS = ("구약", "신약")
+_DUAL_MIN_MESSAGES = 10
+_DUAL_MIN_RATIO = 0.2
+
 
 def detect_file_format(filename, file_bytes):
     """확장자와 매직바이트로 파일 형식을 판별한다. csv/txt/zip 중 하나를 반환."""
@@ -88,10 +94,32 @@ def extract_zip_meta(filename):
 
 
 def detect_track_mode(rows):
-    """메시지에서 투트랙 공지 문구를 감지하여 track_mode를 반환한다."""
+    """투트랙 방 여부를 판별하여 track_mode를 반환한다.
+
+    1) 투트랙 공지 문구가 있으면 dual
+    2) 없으면 날짜 인증 메시지 중 "구약"/"신약"을 적은 비율로 판단
+       (공지 문구는 기수마다 바뀌지만 인증 형태는 유지된다)
+    """
+    from app.date_parser import parse_dates
+
+    dated = 0
+    with_track = 0
     for _, message in rows:
+        if not message:
+            continue
         if _DUAL_MARKER in message:
             return "dual"
+        if not parse_dates(message):
+            continue
+        dated += 1
+        if any(word in message for word in _DUAL_TRACK_WORDS):
+            with_track += 1
+
+    if with_track >= _DUAL_MIN_MESSAGES and with_track >= dated * _DUAL_MIN_RATIO:
+        logger.info(
+            "투트랙 감지 — 날짜 인증 %d건 중 구약/신약 표기 %d건", dated, with_track,
+        )
+        return "dual"
     return "single"
 
 
@@ -145,7 +173,7 @@ def build_drive_filename(leader, saved_date, room_name=None):
     return f"꿀성경_{name_part}{date_part}{room_part}.xlsx"
 
 
-def detect_schedule_type(rows, room_name, track_mode):
+def detect_schedule_type(rows, room_name, track_mode, part=None):
     """파싱된 행, 방이름, 트랙모드를 기반으로 진도표 유형을 판별한다.
 
     Returns:
@@ -158,7 +186,7 @@ def detect_schedule_type(rows, room_name, track_mode):
     normalized_room_name = unicodedata.normalize("NFC", room_name or "")
     if "교육국" in normalized_room_name:
         return "education"
-    schedule = detect_schedule(rows)
+    schedule = detect_schedule(rows, part=part)
     if schedule is None:
         return "unknown"
     if schedule in BIBLE_PART_DATES:

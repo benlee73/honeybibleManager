@@ -511,6 +511,10 @@ form.addEventListener("submit", async (event) => {
     const formData = new FormData();
     formData.append("file", file, file.name);
     formData.append("theme", localStorage.getItem("theme") || "honey");
+    const selectedPart = document.querySelector('input[name="part"]:checked');
+    if (selectedPart && selectedPart.value) {
+      formData.append("part", selectedPart.value);
+    }
 
     const response = await fetch(API_ENDPOINT, {
       method: "POST",

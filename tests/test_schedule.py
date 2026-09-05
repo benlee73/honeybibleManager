@@ -10,11 +10,12 @@ from app.schedule import (
     _BIBLE_RANGES,
     _NT_RANGES,
     _generate_dates,
-    detect_part,
+    current_part,
     detect_schedule,
     get_part_books,
     get_part_schedule,
     get_schedule_start,
+    resolve_part,
 )
 
 
@@ -117,7 +118,7 @@ class TestDetectSchedule:
             ("user1", "창세기 1장 읽었습니다"),
             ("user2", "출애굽기 3장 완료"),
         ]
-        result = detect_schedule(rows)
+        result = detect_schedule(rows, part=1)
         assert result is BIBLE_PART_DATES[0]
 
     def test_신약일독_키워드_감지(self):
@@ -125,7 +126,7 @@ class TestDetectSchedule:
             ("user1", "마태복음 1장"),
             ("user2", "마가복음 2장"),
         ]
-        result = detect_schedule(rows)
+        result = detect_schedule(rows, part=1)
         assert result is NT_PART_DATES[0]
 
     def test_둘_다_해당__성경일독_우선(self):
@@ -135,7 +136,7 @@ class TestDetectSchedule:
             ("user3", "마태복음 3장"),
             ("user4", "마가복음 4장"),
         ]
-        result = detect_schedule(rows)
+        result = detect_schedule(rows, part=1)
         assert result is BIBLE_PART_DATES[0]
 
     def test_날짜만_있고_책키워드_없음__날짜로_파트_감지(self):
@@ -144,7 +145,7 @@ class TestDetectSchedule:
             ("user1", "안녕하세요"),
             ("user2", "2/2 😀"),
         ]
-        result = detect_schedule(rows)
+        result = detect_schedule(rows, part=1)
         assert result is BIBLE_PART_DATES[0]
 
     def test_날짜와_책키워드_모두_없음__None_반환(self):
@@ -152,63 +153,89 @@ class TestDetectSchedule:
             ("user1", "안녕하세요"),
             ("user2", "그냥 메시지"),
         ]
-        result = detect_schedule(rows)
+        result = detect_schedule(rows, part=1)
         assert result is None
 
     def test_창세기만__성경일독_감지(self):
         rows = [
             ("user1", "창세기 1장"),
         ]
-        result = detect_schedule(rows)
+        result = detect_schedule(rows, part=1)
         assert result is BIBLE_PART_DATES[0]
 
     def test_마태복음만__신약일독_감지(self):
         rows = [
             ("user1", "마태복음 1장"),
         ]
-        result = detect_schedule(rows)
+        result = detect_schedule(rows, part=1)
         assert result is NT_PART_DATES[0]
 
     def test_빈_rows__None_반환(self):
-        result = detect_schedule([])
+        result = detect_schedule([], part=1)
         assert result is None
 
 
-class TestDetectPart:
-    def test_파트1_날짜_감지(self):
+class TestCurrentPart:
+    def test_파트1_기간(self):
+        assert current_part(datetime.date(2026, 2, 2)) == 1
+        assert current_part(datetime.date(2026, 5, 30)) == 1
+
+    def test_파트2_기간(self):
+        assert current_part(datetime.date(2026, 6, 8)) == 2
+        assert current_part(datetime.date(2026, 9, 5)) == 2
+
+    def test_파트3_기간(self):
+        assert current_part(datetime.date(2026, 10, 5)) == 3
+        assert current_part(datetime.date(2026, 12, 19)) == 3
+
+    def test_파트_간_쉬는_기간__직전_파트_유지(self):
+        # 5/31~6/7은 PART 1 종료 후 PART 2 시작 전
+        assert current_part(datetime.date(2026, 6, 1)) == 1
+        # 9/27~10/4는 PART 2 종료 후 PART 3 시작 전
+        assert current_part(datetime.date(2026, 9, 30)) == 2
+
+    def test_첫_파트_시작_전__파트1(self):
+        assert current_part(datetime.date(2026, 1, 15)) == 1
+
+    def test_전체_종료_후__파트3_유지(self):
+        assert current_part(datetime.date(2026, 12, 31)) == 3
+
+
+class TestResolvePart:
+    def test_명시된_파트_우선(self):
+        assert resolve_part(1, today=datetime.date(2026, 9, 5)) == 1
+        assert resolve_part("3", today=datetime.date(2026, 9, 5)) == 3
+
+    def test_미지정__오늘_기준_파트(self):
+        assert resolve_part(None, today=datetime.date(2026, 9, 5)) == 2
+        assert resolve_part("", today=datetime.date(2026, 3, 1)) == 1
+
+    def test_범위_밖_값__오늘_기준_파트(self):
+        assert resolve_part(0, today=datetime.date(2026, 9, 5)) == 2
+        assert resolve_part(4, today=datetime.date(2026, 9, 5)) == 2
+
+
+class TestDetectScheduleUsesRequestedPart:
+    def test_파트1_인증만_있어도_요청_파트2_진도표(self):
+        # PART 1부터 이어온 방: 과거 인증이 더 많아도 요청 파트를 따른다
+        rows = [("u", "2/2🍉"), ("u", "3/15🍉"), ("u", "6/8🍉")]
+        assert detect_schedule(rows, part=2) is BIBLE_PART_DATES[1]
+
+    def test_파트_미지정__오늘_기준_파트(self):
         rows = [("u", "2/2🍉"), ("u", "3/15🍉")]
-        assert detect_part(rows) == 1
-
-    def test_파트2_날짜_감지(self):
-        rows = [("u", "6/8🍉"), ("u", "7/15🍉")]
-        assert detect_part(rows) == 2
-
-    def test_파트3_날짜_감지(self):
-        rows = [("u", "10/5🍉"), ("u", "11/15🍉")]
-        assert detect_part(rows) == 3
-
-    def test_파트_경계_갭_날짜_미카운트(self):
-        # 6/1은 P1 종료(5/30) 이후, P2 시작(6/8) 이전 갭
-        rows = [("u", "6/1🍉")]
-        assert detect_part(rows) is None
-
-    def test_혼재_시_가장_많은_파트(self):
-        rows = [("u", "2/2🍉"), ("u", "2/3🍉"), ("u", "11/15🍉")]
-        assert detect_part(rows) == 1
-
-    def test_빈_rows__None(self):
-        assert detect_part([]) is None
+        expected = BIBLE_PART_DATES[current_part() - 1]
+        assert detect_schedule(rows) is expected
 
 
 class TestDetectSchedulePerPart:
     def test_파트2_성경일독_감지(self):
         rows = [("u", "시편 1편 6/8🍉"), ("u", "잠언 6/9🍉")]
-        result = detect_schedule(rows)
+        result = detect_schedule(rows, part=2)
         assert result is BIBLE_PART_DATES[1]
 
     def test_파트2_신약일독_감지(self):
         rows = [("u", "사도행전 6/8🍉"), ("u", "로마서 6/9🍉")]
-        result = detect_schedule(rows)
+        result = detect_schedule(rows, part=2)
         assert result is NT_PART_DATES[1]
 
     def test_파트3_성경일독_기본(self):
@@ -216,15 +243,35 @@ class TestDetectSchedulePerPart:
         # bible 전용 키워드(P3에는 없음)도 nt 전용 키워드(빌립보서 이후)도 보이지 않으면
         # bible 기본값
         rows = [("u", "마태복음 1장 10/5🍉"), ("u", "10/6🍉")]
-        result = detect_schedule(rows)
+        result = detect_schedule(rows, part=3)
         assert result is BIBLE_PART_DATES[2]
 
     def test_파트3_신약일독은_키워드만으로_구분_불가__bible_기본(self):
         # P3 성경일독·신약일독은 같은 책(빌립보서~요한계시록)을 읽으므로
         # 키워드만으로는 트랙 구분 불가 — 안전하게 bible 기본
         rows = [("u", "빌립보서 10/5🍉"), ("u", "디모데전서 10/6🍉")]
-        result = detect_schedule(rows)
+        result = detect_schedule(rows, part=3)
         assert result is BIBLE_PART_DATES[2]
+
+
+class TestDetectScheduleTrackByHitCount:
+    def test_신약일독_방에_성경일독_안내_한_건__신약일독_유지(self):
+        # 방을 잘못 찾아 들어온 성경일독 안내 한 건이 트랙을 뒤집으면 안 된다
+        rows = [("리더", f"사도행전 {n}장") for n in range(1, 21)]
+        rows.append(("리더", "🗓️ 9/3 에스겔 21-24"))
+
+        assert detect_schedule(rows, part=2) is NT_PART_DATES[1]
+
+    def test_성경일독_방에_신약일독_안내_한_건__성경일독_유지(self):
+        rows = [("리더", f"이사야 {n}장") for n in range(1, 21)]
+        rows.append(("리더", "🍯 9/3 고린도후서 9"))
+
+        assert detect_schedule(rows, part=2) is BIBLE_PART_DATES[1]
+
+    def test_동점__성경일독_기본(self):
+        rows = [("u", "시편 1편"), ("u", "사도행전 1장")]
+
+        assert detect_schedule(rows, part=2) is BIBLE_PART_DATES[1]
 
 
 class TestGetPartSchedule:

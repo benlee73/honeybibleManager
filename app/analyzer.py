@@ -9,9 +9,9 @@ from app.schedule import (
     BIBLE_PART_DATES,
     NT_DATES,
     NT_PART_DATES,
-    detect_part,
     detect_schedule,
     get_schedule_start,
+    resolve_part,
 )
 
 # 출력 함수를 output_builder에서 re-export (하위호환)
@@ -207,7 +207,7 @@ def parse_csv_rows(csv_text):
     return rows
 
 
-def analyze_chat(csv_text=None, track_mode="single", rows=None):
+def analyze_chat(csv_text=None, track_mode="single", rows=None, part=None):
     if rows is None:
         rows = parse_csv_rows(csv_text or "")
 
@@ -311,7 +311,7 @@ def analyze_chat(csv_text=None, track_mode="single", rows=None):
         logger.debug("  %s → %s", user, info["emoji"])
 
     if track_mode == "dual":
-        part = detect_part(rows) or 1
+        part = resolve_part(part)
         schedule_old = BIBLE_PART_DATES[part - 1]
         schedule_new = NT_PART_DATES[part - 1]
         schedule_start_old = get_schedule_start(schedule_old)
@@ -321,7 +321,7 @@ def analyze_chat(csv_text=None, track_mode="single", rows=None):
             part, len(schedule_old), len(schedule_new),
         )
     else:
-        schedule = detect_schedule(rows)
+        schedule = detect_schedule(rows, part=part)
         schedule_start = get_schedule_start(schedule) if schedule is not None else None
         if schedule is not None:
             logger.info("싱글 모드 — 진도표 감지됨 (유효 날짜 %d개)", len(schedule))

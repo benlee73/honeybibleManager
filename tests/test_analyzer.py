@@ -116,7 +116,7 @@ class TestAnalyzeChat:
             ["2024-01-01", "user1", "3/16😀"],
             ["2024-01-02", "user1", "3/17😀"],
         ])
-        result = analyze_chat(csv_text)
+        result = analyze_chat(csv_text, part=1)
         assert "user1" in result
         assert "😀" == result["user1"]["emoji"]
         assert "3/16" in result["user1"]["dates"]
@@ -127,11 +127,11 @@ class TestAnalyzeChat:
             ["날짜", "이름", "메시지"],
             ["2024-01-01", "user1", "3/15"],
         ])
-        result = analyze_chat(csv_text)
+        result = analyze_chat(csv_text, part=1)
         assert "user1" not in result
 
     def test_analyze_chat__empty_csv__returns_empty(self):
-        result = analyze_chat("")
+        result = analyze_chat("", part=1)
         assert result == {}
 
     def test_analyze_chat__message_without_dates__not_counted(self):
@@ -139,7 +139,7 @@ class TestAnalyzeChat:
             ["날짜", "이름", "메시지"],
             ["2024-01-01", "user1", "안녕하세요😀"],
         ])
-        result = analyze_chat(csv_text)
+        result = analyze_chat(csv_text, part=1)
         assert "user1" not in result
 
     def test_analyze_chat__날짜_수_상한_초과_메시지__스킵(self):
@@ -149,7 +149,7 @@ class TestAnalyzeChat:
             ["2024-01-01", "user1", "3/16😀"],
             ["2024-01-02", "user1", "1/1~2/28😀"],
         ])
-        result = analyze_chat(csv_text)
+        result = analyze_chat(csv_text, part=1)
         assert "user1" in result
         # 상한 초과 메시지의 날짜는 포함되지 않아야 함
         assert result["user1"]["dates"] == {"3/16"}
@@ -160,7 +160,7 @@ class TestAnalyzeChat:
             ["날짜", "이름", "메시지"],
             ["2024-01-01", "user1", "2/2~2/20😀"],
         ])
-        result = analyze_chat(csv_text)
+        result = analyze_chat(csv_text, part=1)
         assert "user1" in result
         assert "2/2" in result["user1"]["dates"]
         assert "2/10" in result["user1"]["dates"]
@@ -173,7 +173,7 @@ class TestAnalyzeChat:
             ["2024-01-03", "user1", "3/16😀"],
             ["2024-01-04", "user1", "3/17😀"],
         ])
-        result = analyze_chat(csv_text)
+        result = analyze_chat(csv_text, part=1)
         assert "user1" in result
         assert result["user1"]["dates"] == {"3/16", "3/17"}
         assert len(result["user1"]["dates"]) == 2
@@ -281,7 +281,7 @@ class TestAnalyzeChatDual:
             ["2024-01-02", "user1", "2/3 신약 😀"],
             ["2024-01-03", "user1", "2/4 구약 신약 😀"],
         ])
-        result = analyze_chat(csv_text, track_mode="dual")
+        result = analyze_chat(csv_text, track_mode="dual", part=1)
         assert "user1" in result
         assert result["user1"]["dates_old"] == {"2/2", "2/4"}
         assert result["user1"]["dates_new"] == {"2/3", "2/4"}
@@ -292,7 +292,7 @@ class TestAnalyzeChatDual:
             ["2024-01-01", "user1", "2/2 구약 😀"],
             ["2024-01-02", "user1", "2/3 😀"],
         ])
-        result = analyze_chat(csv_text, track_mode="dual")
+        result = analyze_chat(csv_text, track_mode="dual", part=1)
         assert "user1" in result
         assert result["user1"]["dates_old"] == {"2/2", "2/3"}
         assert result["user1"]["dates_new"] == {"2/3"}
@@ -303,7 +303,7 @@ class TestAnalyzeChatDual:
             ["2024-01-01", "user1", "2/2 구약 😀"],
             ["2024-01-02", "user1", "~2/4 😀"],
         ])
-        result = analyze_chat(csv_text, track_mode="dual")
+        result = analyze_chat(csv_text, track_mode="dual", part=1)
         assert "user1" in result
         # ~2/4는 구약 last_old=2/2 기준으로 2/3,2/4 확장, 신약은 last_new=None이므로 2/4만
         assert "2/3" in result["user1"]["dates_old"]
@@ -318,7 +318,7 @@ class TestAnalyzeChatDual:
             ["2024-01-02", "user1", "2/3 😀"],
             ["2024-01-03", "user1", "2/4 구약 😀"],
         ])
-        result = analyze_chat(csv_text, track_mode="dual")
+        result = analyze_chat(csv_text, track_mode="dual", part=1)
         assert "user1" in result
         # 2/3은 키워드 없으므로 양쪽에 체크
         assert result["user1"]["dates_old"] == {"2/2", "2/3", "2/4"}
@@ -331,7 +331,7 @@ class TestAnalyzeChatDual:
             ["2024-01-01", "user2", "2/2 신약 🔥"],
             ["2024-01-02", "user2", "2/3 구약 신약 🔥"],
         ])
-        result = analyze_chat(csv_text, track_mode="dual")
+        result = analyze_chat(csv_text, track_mode="dual", part=1)
         assert result["user1"]["dates_old"] == {"2/2"}
         assert result["user1"]["dates_new"] == set()
         assert result["user2"]["dates_old"] == {"2/3"}
@@ -344,7 +344,7 @@ class TestAnalyzeChatDual:
             ["2024-01-01", "user1", "3/14 구약 😀"],
             ["2024-01-02", "user1", "1/1~2/28 구약 😀"],
         ])
-        result = analyze_chat(csv_text, track_mode="dual")
+        result = analyze_chat(csv_text, track_mode="dual", part=1)
         assert "user1" in result
         # 상한 초과 메시지의 날짜는 포함되지 않아야 함
         assert result["user1"]["dates_old"] == {"3/14"}
@@ -359,7 +359,7 @@ class TestAnalyzeChatDual:
             ["2024-01-05", "user1", "2/4 구약 신약 😀"],
             ["2024-01-06", "user1", "2/4 구약 신약 😀"],
         ])
-        result = analyze_chat(csv_text, track_mode="dual")
+        result = analyze_chat(csv_text, track_mode="dual", part=1)
         assert "user1" in result
         assert result["user1"]["dates_old"] == {"2/2", "2/4"}
         assert result["user1"]["dates_new"] == {"2/3", "2/4"}
@@ -374,7 +374,7 @@ class TestAnalyzeChatDual:
             ["2024-01-03", "광천 김형은", "2/2~3 구약 신약(연필)"],
             ["2024-01-04", "광천 김형은", "2/3~6 구약 신약(연필)"],
         ])
-        result = analyze_chat(csv_text, track_mode="dual")
+        result = analyze_chat(csv_text, track_mode="dual", part=1)
         # "광천 강창우" → 정규화 → "강창우"
         assert "강창우" in result
         assert result["강창우"]["emoji"] == "(무표정)"
@@ -392,7 +392,7 @@ class TestAnalyzeChatDual:
             ["날짜", "이름", "메시지"],
             ["2024-01-01", "user1", "2/2😀"],
         ])
-        result = analyze_chat(csv_text, track_mode="single")
+        result = analyze_chat(csv_text, track_mode="single", part=1)
         assert "dates" in result["user1"]
         assert result["user1"]["dates"] == {"2/2"}
 
@@ -943,7 +943,7 @@ class TestAnalyzeChatLeadingTildeCatchup:
             ["2024-01-01", "user1", "2/4😀"],
             ["2024-01-02", "user1", "~2/7😀"],
         ])
-        result = analyze_chat(csv_text)
+        result = analyze_chat(csv_text, part=1)
         assert "user1" in result
         assert result["user1"]["dates"] == {"2/4", "2/5", "2/6", "2/7"}
 
@@ -953,7 +953,7 @@ class TestAnalyzeChatLeadingTildeCatchup:
             ["날짜", "이름", "메시지"],
             ["2024-01-01", "user1", "~2/7😀"],
         ])
-        result = analyze_chat(csv_text)
+        result = analyze_chat(csv_text, part=1)
         assert "user1" in result
         assert result["user1"]["dates"] == {"2/2", "2/3", "2/4", "2/5", "2/6", "2/7"}
 
@@ -964,7 +964,7 @@ class TestAnalyzeChatLeadingTildeCatchup:
             ["2024-01-01", "user1", "2/2😀"],
             ["2024-01-02", "user1", "3/1~4/15😀"],
         ])
-        result = analyze_chat(csv_text)
+        result = analyze_chat(csv_text, part=1)
         assert "user1" in result
         # 3/1~4/15는 30일 초과로 스킵 → 첫 메시지의 2/2만 남음
         assert result["user1"]["dates"] == {"2/2"}
@@ -977,7 +977,7 @@ class TestAnalyzeChatLeadingTildeCatchup:
             ["2024-01-03", "user1", "~2/5 구약 😀"],
             ["2024-01-04", "user1", "~2/6 신약 😀"],
         ])
-        result = analyze_chat(csv_text, track_mode="dual")
+        result = analyze_chat(csv_text, track_mode="dual", part=1)
         assert "user1" in result
         # 구약 last_date=(2,2) → ~2/5 → 2/3,2/4,2/5
         assert result["user1"]["dates_old"] == {"2/2", "2/3", "2/4", "2/5"}
@@ -992,7 +992,7 @@ class TestAnalyzeChatLeadingTildeCatchup:
             ["2024-01-02", "user1", "~2/3😀"],
             ["2024-01-03", "user1", "~2/5😀"],
         ])
-        result = analyze_chat(csv_text)
+        result = analyze_chat(csv_text, part=1)
         assert "user1" in result
         assert result["user1"]["dates"] == {"2/2", "2/3", "2/4", "2/5"}
 
@@ -1007,7 +1007,7 @@ class TestAnalyzeChatLeadingTildeCatchup:
             if (3, 20) <= tuple(map(int, d.split("/"))) <= (4, 27)
         }
 
-        result = analyze_chat(csv_text)
+        result = analyze_chat(csv_text, part=1)
 
         assert "user1" in result
         assert result["user1"]["dates"] == expected
@@ -1021,7 +1021,7 @@ class TestAnalyzeChatLeadingTildeCatchup:
             ["2024-01-02", "user1", "~5/30😀"],
         ])
 
-        result = analyze_chat(csv_text)
+        result = analyze_chat(csv_text, part=1)
 
         assert "user1" in result
         assert result["user1"]["dates"] == {"2/2"}
@@ -1043,7 +1043,7 @@ class TestAnalyzeChatScheduleFilter:
             ["2024-01-02", "user1", "출애굽기 2장 2/8😀"],
             ["2024-01-03", "user1", "2/9😀"],
         ])
-        result = analyze_chat(csv_text)
+        result = analyze_chat(csv_text, part=1)
         assert "user1" in result
         assert "2/7" in result["user1"]["dates"]
         assert "2/8" not in result["user1"]["dates"]
@@ -1056,7 +1056,7 @@ class TestAnalyzeChatScheduleFilter:
             ["2024-01-01", "user1", "2/7😀"],
             ["2024-01-02", "user1", "2/8😀"],
         ])
-        result = analyze_chat(csv_text)
+        result = analyze_chat(csv_text, part=1)
         assert "user1" in result
         assert "2/7" in result["user1"]["dates"]
         assert "2/8" not in result["user1"]["dates"]
@@ -1069,7 +1069,7 @@ class TestAnalyzeChatScheduleFilter:
             ["2024-01-01", "user1", "5/30 구약 😀"],
             ["2024-01-02", "user1", "5/30 신약 😀"],
         ])
-        result = analyze_chat(csv_text, track_mode="dual")
+        result = analyze_chat(csv_text, track_mode="dual", part=1)
         assert "user1" in result
         assert "5/30" in result["user1"]["dates_old"]
         assert "5/30" not in result["user1"]["dates_new"]
@@ -1081,7 +1081,7 @@ class TestAnalyzeChatScheduleFilter:
             ["2024-01-01", "user1", "창세기 2/7😀"],
             ["2024-01-02", "user1", "출애굽기 ~2/9😀"],
         ])
-        result = analyze_chat(csv_text)
+        result = analyze_chat(csv_text, part=1)
         assert "user1" in result
         assert "2/7" in result["user1"]["dates"]
         assert "2/8" not in result["user1"]["dates"]
@@ -1095,7 +1095,7 @@ class TestAnalyzeChatScheduleFilter:
             ["2024-01-02", "user1", "출애굽기 2/3😀"],
             ["2024-01-03", "user1", "2/8😀"],
         ])
-        result = analyze_chat(csv_text)
+        result = analyze_chat(csv_text, part=1)
         assert "user1" in result
         assert "2/2" in result["user1"]["dates"]
         assert "2/3" in result["user1"]["dates"]
@@ -1143,7 +1143,7 @@ class TestAnalyzeChatWithRows:
             ("user1", "3/16😀"),
             ("user1", "3/17😀"),
         ]
-        result = analyze_chat(rows=rows)
+        result = analyze_chat(rows=rows, part=1)
         assert "user1" in result
         assert result["user1"]["dates"] == {"3/16", "3/17"}
 
@@ -1152,14 +1152,14 @@ class TestAnalyzeChatWithRows:
             ("user1", "2/2 구약 😀"),
             ("user1", "2/3 신약 😀"),
         ]
-        result = analyze_chat(rows=rows, track_mode="dual")
+        result = analyze_chat(rows=rows, track_mode="dual", part=1)
         assert "user1" in result
         assert result["user1"]["dates_old"] == {"2/2"}
         assert result["user1"]["dates_new"] == {"2/3"}
 
     def test_csv_text와_rows_동시_전달시_rows_우선(self):
         rows = [("user1", "3/16😀")]
-        result = analyze_chat(csv_text="invalid", rows=rows)
+        result = analyze_chat(csv_text="invalid", rows=rows, part=1)
         assert "user1" in result
 
 
@@ -1227,7 +1227,7 @@ class TestAnalyzeChatMultilineMessage:
             ("user1", "2/20 구약 신약 🍚"),
             ("user1", "~ 2/25 구약 🍚\n~ 3/2 신약 🍚"),
         ]
-        result = analyze_chat(rows=rows, track_mode="dual")
+        result = analyze_chat(rows=rows, track_mode="dual", part=1)
         assert "user1" in result
         # 구약: 2/20 + 2/21~2/25
         assert "2/20" in result["user1"]["dates_old"]
@@ -1241,7 +1241,7 @@ class TestAnalyzeChatMultilineMessage:
         rows = [
             ("user1", "2/26 구약 🍚\n3/3 신약 🍚"),
         ]
-        result = analyze_chat(rows=rows, track_mode="dual")
+        result = analyze_chat(rows=rows, track_mode="dual", part=1)
         assert "user1" in result
         assert "2/26" in result["user1"]["dates_old"]
         assert "2/26" not in result["user1"]["dates_new"]
@@ -1252,7 +1252,7 @@ class TestAnalyzeChatMultilineMessage:
         rows = [
             ("user1", "3/6 😀\n3/7 😀"),
         ]
-        result = analyze_chat(rows=rows, track_mode="single")
+        result = analyze_chat(rows=rows, track_mode="single", part=1)
         assert "user1" in result
         assert "3/6" in result["user1"]["dates"]
         assert "3/7" in result["user1"]["dates"]
@@ -1261,7 +1261,7 @@ class TestAnalyzeChatMultilineMessage:
         rows = [
             ("user1", "3/6 구약 신약 😀"),
         ]
-        result = analyze_chat(rows=rows, track_mode="dual")
+        result = analyze_chat(rows=rows, track_mode="dual", part=1)
         assert "user1" in result
         assert "3/6" in result["user1"]["dates_old"]
         assert "3/6" in result["user1"]["dates_new"]
@@ -1271,7 +1271,7 @@ class TestAnalyzeChatMultilineMessage:
         rows = [
             ("광천 강창우", "2/28 구약 신약  (무표정)\n\n3/2 구약 신약  (무표정)"),
         ]
-        result = analyze_chat(rows=rows, track_mode="dual")
+        result = analyze_chat(rows=rows, track_mode="dual", part=1)
         assert "강창우" in result
         assert "2/28" in result["강창우"]["dates_old"]
         assert "3/2" in result["강창우"]["dates_old"]
@@ -1282,7 +1282,7 @@ class TestAnalyzeChatMultilineMessage:
             ("user1", "2/26 구약 신약 🍇"),
             ("user1", "2/27 구약신약\n2/28 구약 \n3/2 구약 신약 🍇"),
         ]
-        result = analyze_chat(rows=rows, track_mode="dual")
+        result = analyze_chat(rows=rows, track_mode="dual", part=1)
         assert "user1" in result
         assert "2/27" in result["user1"]["dates_old"]
         assert "2/27" in result["user1"]["dates_new"]
@@ -1294,7 +1294,7 @@ class TestAnalyzeChatMultilineMessage:
         rows = [
             ("user1", "3/6 😀\n3/7"),
         ]
-        result = analyze_chat(rows=rows)
+        result = analyze_chat(rows=rows, part=1)
         assert "user1" in result
         assert "3/6" in result["user1"]["dates"]
         assert "3/7" in result["user1"]["dates"]
@@ -1311,7 +1311,7 @@ class TestAnalyzeChatEmojiChange:
             ("user1", "2/4 구약 신약 ⭐️"),
             ("user1", "2/5 구약 신약 ⭐️"),
         ]
-        result = analyze_chat(rows=rows, track_mode="dual")
+        result = analyze_chat(rows=rows, track_mode="dual", part=1)
         assert "user1" in result
         assert result["user1"]["dates_old"] == {"2/2", "2/3", "2/4", "2/5"}
         assert result["user1"]["dates_new"] == {"2/2", "2/3", "2/4", "2/5"}
@@ -1324,7 +1324,7 @@ class TestAnalyzeChatEmojiChange:
             ("user1", "2/4 😀"),
             ("user1", "2/5 🔥"),
         ]
-        result = analyze_chat(rows=rows)
+        result = analyze_chat(rows=rows, part=1)
         assert result["user1"]["emoji"] == "😀"
 
     def test_이모지_변경__single_모드(self):
@@ -1332,7 +1332,7 @@ class TestAnalyzeChatEmojiChange:
             ("user1", "3/6 😀"),
             ("user1", "3/7 🔥"),
         ]
-        result = analyze_chat(rows=rows)
+        result = analyze_chat(rows=rows, part=1)
         assert "user1" in result
         assert "3/6" in result["user1"]["dates"]
         assert "3/7" in result["user1"]["dates"]
@@ -1355,7 +1355,7 @@ class TestAnalyzeChatConsecutiveMessageWithoutEmoji:
             ["2024-01-01", "user1", "3/6 구약 신약 😀"],
             ["2024-01-01", "user1", "3/7 구약"],
         ])
-        result = analyze_chat(csv_text)
+        result = analyze_chat(csv_text, part=1)
         assert "user1" in result
         assert "3/6" in result["user1"]["dates"]
         assert "3/7" in result["user1"]["dates"]
@@ -1368,7 +1368,7 @@ class TestAnalyzeChatConsecutiveMessageWithoutEmoji:
             ["2024-01-01", "user2", "3/6 구약 🔥"],
             ["2024-01-01", "user1", "3/7 구약"],
         ])
-        result = analyze_chat(csv_text)
+        result = analyze_chat(csv_text, part=1)
         assert "user1" in result
         assert "3/6" in result["user1"]["dates"]
         assert "3/7" not in result["user1"]["dates"]
@@ -1379,7 +1379,7 @@ class TestAnalyzeChatConsecutiveMessageWithoutEmoji:
             ["2024-01-01", "user1", "3/6 구약 신약 😀"],
             ["2024-01-01", "user1", "3/7 구약"],
         ])
-        result = analyze_chat(csv_text, track_mode="dual")
+        result = analyze_chat(csv_text, track_mode="dual", part=1)
         assert "user1" in result
         assert "3/6" in result["user1"]["dates_old"]
         assert "3/6" in result["user1"]["dates_new"]
@@ -1392,7 +1392,7 @@ class TestAnalyzeChatConsecutiveMessageWithoutEmoji:
             ["2024-01-01", "user1", "3/6 구약 신약 😀"],
             ["2024-01-01", "user1", "안녕하세요"],
         ])
-        result = analyze_chat(csv_text)
+        result = analyze_chat(csv_text, part=1)
         assert "user1" in result
         assert result["user1"]["dates"] == {"3/6"}
 
@@ -1404,7 +1404,7 @@ class TestAnalyzeChatConsecutiveMessageWithoutEmoji:
             ["2024-01-01", "user1", "3/7 구약"],
             ["2024-01-02", "user1", "3/9 구약 신약 😀"],
         ])
-        result = analyze_chat(csv_text)
+        result = analyze_chat(csv_text, part=1)
         assert "user1" in result
         assert result["user1"]["dates"] == {"3/6", "3/7", "3/9"}
 

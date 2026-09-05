@@ -1242,6 +1242,41 @@ body[data-theme="neon"] .guide-toggle-indicator {
   accent-color: var(--honey-3);
 }
 
+.part-mode {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 10px 16px;
+  margin: 0;
+  background: var(--input-bg);
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 18px;
+  font-size: 14px;
+  color: var(--ink-1);
+}
+
+.part-mode legend {
+  float: left;
+  width: 100%;
+  padding: 0;
+  margin-bottom: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink-2);
+}
+
+.part-mode label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+
+.part-mode input[type="radio"] {
+  accent-color: var(--honey-3);
+}
+
 .merge-stats {
   display: flex;
   gap: 12px;

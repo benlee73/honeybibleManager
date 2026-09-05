@@ -31,7 +31,7 @@ from app.file_processor import MAX_DECOMPRESSED_BYTES
 from app.merger import build_merged_preview, build_merged_xlsx, load_education_config, merge_files, resolve_alias, resolve_leader_override
 from app.image_builder import build_output_image
 from app.logger import get_logger
-from app.schedule import detect_part
+from app.schedule import resolve_part
 from app.txt_parser import extract_chat_meta, parse_txt
 
 logger = get_logger("handler")
@@ -452,10 +452,12 @@ class HoneyBibleHandler(BaseHTTPRequestHandler):
                         len(rows), room_name or "(미확인)", track_mode)
 
             theme = extract_multipart_field(payload, content_type, "theme") or "honey"
+            part = resolve_part(extract_multipart_field(payload, content_type, "part"))
+            logger.info("적용 파트: PART %d", part)
 
             leader = extract_leader(rows)
 
-            users = analyze_chat(rows=rows, track_mode=track_mode)
+            users = analyze_chat(rows=rows, track_mode=track_mode, part=part)
 
             # 이름 통일: 약칭 → 본명 변환 (모든 참여자에 적용)
             edu_config = load_education_config()
@@ -474,12 +476,12 @@ class HoneyBibleHandler(BaseHTTPRequestHandler):
                         users[member] = {"dates_old": set(), "dates_new": set(), "emoji": ""}
                     else:
                         users[member] = {"dates": set(), "emoji": ""}
-            schedule_type = detect_schedule_type(rows, room_name, track_mode)
+            schedule_type = detect_schedule_type(rows, room_name, track_mode, part=part)
             meta = {
                 "room_name": room_name or "",
                 "track_mode": track_mode,
                 "schedule_type": schedule_type,
-                "part": detect_part(rows) or 1,
+                "part": part,
                 "leader": clean_leader_name(canonical_leader) if canonical_leader else "",
             }
             xlsx_bytes = build_output_xlsx(users, track_mode=track_mode, meta=meta)

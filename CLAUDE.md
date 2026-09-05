@@ -32,7 +32,7 @@ education_config.json  # 교육국 멤버 분류 설정 (신약일독/미참여)
 
 ## 핵심 동작 흐름
 
-1. 클라이언트가 대화 파일(CSV/TXT/ZIP)과 `track_mode`(`single`/`dual`), `theme`(honey/bw/brew/neon)를 `POST /analyze`로 업로드
+1. 클라이언트가 대화 파일(CSV/TXT/ZIP)과 `theme`(honey/bw/brew/neon), `part`(빈 값=자동/1/2/3)를 `POST /analyze`로 업로드 (`track_mode`는 서버가 메시지에서 자동 감지)
 2. `handler.py`가 multipart 데이터에서 파일 추출, `file_processor.py`가 파일 형식 감지(매직바이트/확장자) 및 메타데이터 추출
 3. 파일 형식에 따라 파싱: CSV → `parse_csv_rows()`, TXT → `parse_txt()`, ZIP → TXT 추출 후 `parse_txt()`
 4. `analyzer.py`가 `(user, message)` 리스트를 분석하여 사용자별 이모티콘 할당 및 날짜 수집 (투트랙 모드 시 구약/신약 분리)
@@ -83,6 +83,7 @@ education_config.json  # 교육국 멤버 분류 설정 (신약일독/미참여)
 - `track_mode`: single/dual
 - `schedule_type`: bible/nt/dual/education/unknown
 - `leader`: 방장 이름
+- `part`: 적용된 진도 파트 (1/2/3)
 
 ### Drive 파일명 형식
 
@@ -93,8 +94,26 @@ education_config.json  # 교육국 멤버 분류 설정 (신약일독/미참여)
 - 한 메시지에서 추출된 날짜가 14개(`MAX_DATES_PER_MESSAGE`)를 초과하면 공지성 메시지로 간주하여 스킵한다.
 - 진도표 기반 날짜 필터링: 일요일 및 파트 간 쉬는 기간의 날짜는 결과에서 제외한다.
   - 성경일독: 월~토 읽기 (일요일 쉼), 신약일독: 월~금 읽기 (토·일요일 쉼)
-  - Single 모드: CSV 메시지에서 '창세기'+'출애굽기' → 성경일독, '마태복음'+'마가복음' → 신약일독 진도표 적용 (키워드 없으면 필터 미적용)
   - Dual 모드: 구약 → 성경일독, 신약 → 신약일독 진도표 자동 적용
+
+### 파트(PART) 결정
+
+진도 파트는 메시지 내용이 아니라 **요청값**으로 정한다 (`schedule.resolve_part`).
+- 프론트에서 파트를 선택하면 그 파트, `자동`이면 **오늘 날짜가 속한 파트**(`schedule.current_part`)
+- 파트 간 쉬는 기간이나 전체 종료 후에는 직전 파트를 유지한다
+- PART 1부터 이어서 쓰는 카톡방은 과거 파트 인증이 더 많아, 메시지 날짜 분포로 파트를 감지하면 직전 파트로 쏠린다. 그래서 감지 대신 날짜 기준으로 바꿨다. PART 3 초반에 PART 2 결과를 다시 뽑는 용도로 수동 선택을 남겨둔다.
+
+### 트랙(성경일독/신약일독) 결정
+
+파트가 정해지면 해당 파트의 책 키워드 **등장 횟수**로 트랙을 정한다 (`schedule.detect_schedule`).
+존재 여부가 아니라 횟수로 비교한다 — 방을 잘못 찾아 들어온 안내 한 건이 트랙 전체를 뒤집는 사고가 있었다.
+PART 3는 두 트랙이 같은 책을 읽어 전용 키워드가 겹치므로 성경일독이 기본값이다.
+
+### 투트랙 방 감지
+
+`file_processor.detect_track_mode`는 투트랙 공지 문구를 먼저 보고, 없으면 날짜 인증 메시지 중
+"구약"/"신약"을 적은 비율로 판단한다(10건 이상 & 20% 이상). 공지 문구는 기수마다 바뀌지만
+인증 형태는 유지되기 때문이다.
 
 ## 환경변수 (Google Drive 업로드용, 선택)
 

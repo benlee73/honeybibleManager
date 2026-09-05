@@ -1,4 +1,5 @@
 import datetime
+import re
 
 from app.logger import get_logger
 
@@ -86,141 +87,108 @@ _NT_PART_KEYWORDS = (
 )
 
 
-def _date_in_part(month, day, ranges_index):
-    """월/일이 파트 인덱스의 범위에 포함되면 True (연도는 무시)."""
-    start, end = _BIBLE_RANGES[ranges_index]
-    target = (start.year, month, day)
-    s = (start.year, start.month, start.day)
-    # NT 종료가 더 이르므로 BIBLE 범위(더 넓음)를 사용해서 파트 매칭
-    e = (end.year, end.month, end.day)
-    return s <= target <= e
+def current_part(today=None):
+    """오늘 날짜가 속한 파트(1/2/3)를 반환한다.
 
-
-def detect_part(rows):
-    """메시지 timestamps의 월/일 분포로 파트(1/2/3)를 결정한다.
-
-    - rows의 user 메시지 본문에는 "M/D" 인증 패턴이 들어있으므로 그것으로는
-      판단하기 어렵다. 대신 시스템 메시지에 포함된 안내 날짜("🗓️ 3/2") 등
-      모든 텍스트의 M/D 등장 분포를 카운트한다.
-    - 가장 많은 표를 받은 파트를 반환. 동률이면 더 늦은 파트.
-    - 매칭 표가 0이면 None.
+    - 파트 진행 기간 안이면 해당 파트
+    - 파트 간 쉬는 기간이거나 전체 종료 후면 직전(가장 최근 시작한) 파트
+    - 첫 파트 시작 전이면 PART 1
     """
-    import re
-    pattern = re.compile(r"(?<!\d)(\d{1,2})/(\d{1,2})(?!\d)")
-    counts = [0, 0, 0]
+    if today is None:
+        today = datetime.date.today()
+    result = 1
+    for idx, (start, end) in enumerate(_BIBLE_RANGES):
+        if today < start:
+            break
+        result = idx + 1
+        if today <= end:
+            break
+    return result
+
+
+def resolve_part(part=None, today=None):
+    """요청된 파트를 1~3으로 확정한다. 미지정/비정상 값은 오늘 날짜 기준 파트."""
+    try:
+        value = int(part)
+    except (TypeError, ValueError):
+        return current_part(today)
+    if 1 <= value <= len(_BIBLE_RANGES):
+        return value
+    return current_part(today)
+
+
+_MD_PATTERN = re.compile(r"(?<!\d)(\d{1,2})/(\d{1,2})(?!\d)")
+
+_ALL_BOOK_KEYWORDS = frozenset(
+    kw for kws in _BIBLE_PART_KEYWORDS + _NT_PART_KEYWORDS for kw in kws
+)
+
+
+def _is_schedule_period(month, day):
+    """월/일이 어느 파트든 진행 기간에 속하면 True (연도 무시)."""
+    for start, end in _BIBLE_RANGES:
+        if (start.month, start.day) <= (month, day) <= (end.month, end.day):
+            return True
+    return False
+
+
+def _has_schedule_evidence(rows):
+    """꿀성경 인증방으로 볼 만한 흔적(진행 기간 날짜 또는 성경 권 이름)이 있는지."""
     for _, message in rows:
         if not message:
             continue
-        for m in pattern.finditer(message):
-            try:
-                mo = int(m.group(1))
-                da = int(m.group(2))
-            except ValueError:
-                continue
-            if not (1 <= mo <= 12 and 1 <= da <= 31):
-                continue
-            for idx in range(3):
-                if _date_in_part(mo, da, idx):
-                    counts[idx] += 1
-                    break
-    logger.info("파트 감지 표 — P1: %d, P2: %d, P3: %d", *counts)
-    if max(counts) == 0:
-        return None
-    # 최다 득표, 동률이면 더 늦은 파트
-    best = 0
-    for i in range(3):
-        if counts[i] >= counts[best]:
-            best = i
-    return best + 1
+        for m in _MD_PATTERN.finditer(message):
+            month = int(m.group(1))
+            day = int(m.group(2))
+            if 1 <= month <= 12 and 1 <= day <= 31 and _is_schedule_period(month, day):
+                return True
+        if any(kw in message for kw in _ALL_BOOK_KEYWORDS):
+            return True
+    return False
 
 
-def _detect_part_by_keywords(rows):
-    """책 키워드로만 파트를 추정한다 (날짜 분포가 없을 때 fallback).
+def detect_schedule(rows, part=None):
+    """파트와 책 키워드로 적용할 진도표를 결정한다.
 
-    각 파트의 모든 트랙 키워드 매칭 수를 세고, 가장 많은 파트를 반환.
-    """
-    counts = [0, 0, 0]
-    for part_idx in range(3):
-        kws = set(_BIBLE_PART_KEYWORDS[part_idx]) | set(_NT_PART_KEYWORDS[part_idx])
-        for _, message in rows:
-            if not message:
-                continue
-            for kw in kws:
-                if kw in message:
-                    counts[part_idx] += 1
-                    break
-    if max(counts) == 0:
-        return None
-    # 키워드 동률 시 가장 이른 파트 선호 (P3는 P1·P2 책 다 포함하므로 늘 동률 위험)
-    best = 0
-    for i in range(1, 3):
-        if counts[i] > counts[best]:
-            best = i
-    return best + 1
+    파트는 메시지 내용이 아니라 요청값(없으면 오늘 날짜)으로 정한다.
+    PART 1부터 이어온 방은 과거 파트 인증이 더 많아 메시지 기반 감지가
+    직전 파트로 쏠리는 문제가 있었다.
 
-
-def detect_schedule(rows):
-    """메시지 날짜+책 키워드로 파트와 트랙(bible/nt)을 결정한다.
-
-    1) detect_part: 메시지 내 M/D 분포로 파트 결정 (가장 안정적)
-    2) fallback: 날짜 분포 0이면 책 키워드로 파트 추정
-    3) 트랙: 파트별 책 키워드로 bible/nt 결정.
-       PART 3는 성경일독·신약일독 책이 동일하여 키워드만으로 구분 불가 →
-       날짜가 P3에 매칭되면 기본 bible, 신약 전용 키워드만 보이면 nt.
+    트랙(bible/nt)은 해당 파트의 책 키워드로 판별한다. PART 3는 성경일독·
+    신약일독이 같은 책을 읽어 키워드만으로 구분되지 않으므로 bible이 기본이다.
 
     rows: [(user, message), ...]
-    반환: frozenset | None
+    반환: frozenset | None (꿀성경 인증 흔적이 없으면 None → 필터 미적용)
     """
-    part = detect_part(rows)
-    if part is None:
-        part = _detect_part_by_keywords(rows)
-    if part is None:
-        logger.info("파트 미감지 — 진도표 미적용")
+    if not _has_schedule_evidence(rows):
+        logger.info("진도표 흔적 없음 — 진도표 미적용")
         return None
+    part = resolve_part(part)
 
     bible_kw = _BIBLE_PART_KEYWORDS[part - 1]
     nt_kw = _NT_PART_KEYWORDS[part - 1]
     # bible 전용 키워드 = bible_kw - nt_kw, nt 전용 = nt_kw - bible_kw
     bible_only = tuple(set(bible_kw) - set(nt_kw))
     nt_only = tuple(set(nt_kw) - set(bible_kw))
-    has_bible_only = False
-    has_nt_only = False
-    has_any_bible = False
-    has_any_nt = False
+    # 존재 여부가 아니라 등장 횟수로 비교한다. 방을 잘못 찾아 들어온 안내 한 건이
+    # 트랙 전체를 뒤집는 사고가 실제로 있었다.
+    bible_hits = 0
+    nt_hits = 0
     for _, message in rows:
         if not message:
             continue
-        if not has_bible_only and any(kw in message for kw in bible_only):
-            has_bible_only = True
-        if not has_nt_only and any(kw in message for kw in nt_only):
-            has_nt_only = True
-        if not has_any_bible and any(kw in message for kw in bible_kw):
-            has_any_bible = True
-        if not has_any_nt and any(kw in message for kw in nt_kw):
-            has_any_nt = True
-        if has_bible_only and has_nt_only and has_any_bible and has_any_nt:
-            break
+        if any(kw in message for kw in bible_only):
+            bible_hits += 1
+        if any(kw in message for kw in nt_only):
+            nt_hits += 1
 
-    # P1/P2: 전용 키워드로 명확히 구분 가능
-    # P3: 두 트랙이 같은 책을 읽으므로 신약 전용 키워드만 매칭되면 nt, 아니면 bible
-    if part == 3:
-        # P3에서 nt 전용 키워드(빌립보서 이후)가 보이고 bible 전용은 없으면 nt
-        # 그렇지 않으면 bible 기본
-        track = "nt" if has_nt_only and not has_bible_only else "bible"
-    elif has_bible_only and not has_nt_only:
-        track = "bible"
-    elif has_nt_only and not has_bible_only:
-        track = "nt"
-    elif has_any_bible:
-        track = "bible"
-    elif has_any_nt:
-        track = "nt"
-    else:
-        track = "bible"
+    # PART 3는 성경일독·신약일독이 같은 책을 읽어 전용 키워드가 겹치므로
+    # 양쪽 다 0이 되는 경우가 많다 — 그때는 bible이 기본값이다.
+    track = "nt" if nt_hits > bible_hits else "bible"
 
     logger.info(
-        "진도표 감지 — PART %d, 트랙: %s",
-        part, "성경일독" if track == "bible" else "신약일독",
+        "진도표 감지 — PART %d, 트랙: %s (성경일독 키워드 %d건, 신약일독 키워드 %d건)",
+        part, "성경일독" if track == "bible" else "신약일독", bible_hits, nt_hits,
     )
 
     if track == "bible":
