@@ -292,35 +292,71 @@ def _classify_education_users(users, config):
     return result
 
 
-def _merge_user_into(target, user, dates, emoji, leader):
+def inject_missing_members(users, members_list, leaders, excluded, track_mode):
+    """명단 중 결과에 없는 멤버를 빈 날짜로 추가한다.
+
+    진도 공지만 하고 인증은 안 하는 운영자와 제외 대상은 넣지 않는다.
+    인증이 있으면 이미 users에 있으므로, 여기서 걸리는 건 공지 전용 운영자다.
+    leader는 clean_leader_name을 거쳐 성이 빠져 있어 같은 기준으로 비교한다.
+    """
+    from app.file_processor import clean_leader_name
+
+    operators = {clean_leader_name(name) for name in leaders if name}
+    for member in members_list:
+        if member in users:
+            continue
+        if clean_leader_name(member) in operators:
+            logger.info("공지 전용 운영자 제외: %s", member)
+            continue
+        if any(keyword in member for keyword in excluded):
+            logger.info("제외 대상 멤버 미주입: %s", member)
+            continue
+        if track_mode == "dual":
+            users[member] = {"dates_old": set(), "dates_new": set(), "emoji": ""}
+        else:
+            users[member] = {"dates": set(), "emoji": ""}
+
+
+def _pick_leader(entry, leader, from_education):
+    """담당을 정한다. 교육국방보다 실제 진도방의 담당을 우선한다.
+
+    교육국 담당자들은 본인 방과 교육국방 양쪽에 인증하므로, 처리 순서에 따라
+    담당이 뒤바뀌지 않도록 출처를 기억해 둔다.
+    """
+    if not leader:
+        return
+    if not entry.get("leader"):
+        entry["leader"] = leader
+        entry["leader_from_education"] = from_education
+        return
+    if entry.get("leader_from_education") and not from_education:
+        entry["leader"] = leader
+        entry["leader_from_education"] = False
+
+
+def _merge_user_into(target, user, dates, emoji, leader, from_education=False):
     """대상 dict에 사용자 날짜를 합집합으로 병합한다."""
     if user in target:
         target[user]["dates"].update(dates)
-        # 담당은 교육국방이 아닌 쪽 우선
-        if leader and not target[user].get("leader"):
-            target[user]["leader"] = leader
     else:
-        target[user] = {
-            "dates": set(dates),
-            "emoji": emoji,
-            "leader": leader or "",
-        }
+        target[user] = {"dates": set(dates), "emoji": emoji, "leader": ""}
+    _pick_leader(target[user], leader, from_education)
 
 
-def _merge_dual_user_into(target, user, dates_old, dates_new, emoji, leader):
+def _merge_dual_user_into(target, user, dates_old, dates_new, emoji, leader,
+                          from_education=False):
     """투트랙 사용자를 구약/신약 분리하여 병합한다."""
     if user in target:
         target[user]["dates_old"].update(dates_old)
         target[user]["dates_new"].update(dates_new)
-        if leader and not target[user].get("leader"):
-            target[user]["leader"] = leader
     else:
         target[user] = {
             "dates_old": set(dates_old),
             "dates_new": set(dates_new),
             "emoji": emoji,
-            "leader": leader or "",
+            "leader": "",
         }
+    _pick_leader(target[user], leader, from_education)
 
 
 
@@ -496,15 +532,12 @@ def merge_files(dual_mode="separate", part=None):
         ]
         room_members_cfg = edu_config.get("room_members", {})
         members_list = meta_roster or room_members_cfg.get(canonical_leader, [])
-        for member in members_list:
-            if member not in users:
-                if track_mode == "dual":
-                    users[member] = {"dates_old": set(), "dates_new": set(), "emoji": ""}
-                else:
-                    users[member] = {"dates": set(), "emoji": ""}
+        global_excluded = edu_config.get("excluded_members", [])
+        inject_missing_members(
+            users, members_list, (leader, canonical_leader), global_excluded, track_mode,
+        )
 
         # 전역 제외 멤버 필터링 (모든 room 타입에 적용)
-        global_excluded = edu_config.get("excluded_members", [])
         if global_excluded:
             before = len(users)
             users = {u: d for u, d in users.items()
@@ -512,12 +545,14 @@ def merge_files(dual_mode="separate", part=None):
             if len(users) < before:
                 logger.info("전역 제외 적용: %d명 제거 (%s)", before - len(users), file_name)
 
+        from_education = schedule_type == "education"
+
         if schedule_type == "bible":
             for user, data in users.items():
-                _merge_user_into(bible_users, user, data["dates"], data["emoji"], leader)
+                _merge_user_into(bible_users, user, data["dates"], data["emoji"], leader, from_education)
         elif schedule_type == "nt":
             for user, data in users.items():
-                _merge_user_into(nt_users, user, data["dates"], data["emoji"], leader)
+                _merge_user_into(nt_users, user, data["dates"], data["emoji"], leader, from_education)
         elif schedule_type == "dual":
             dual_excluded = edu_config.get("dual_excluded_members", [])
             if dual_mode == "separate":
@@ -528,23 +563,23 @@ def merge_files(dual_mode="separate", part=None):
                     dates_old = data.get("dates_old", set())
                     dates_new = data.get("dates_new", set())
                     if dates_old or dates_new:
-                        _merge_dual_user_into(dual_users, user, dates_old, dates_new, data["emoji"], leader)
+                        _merge_dual_user_into(dual_users, user, dates_old, dates_new, data["emoji"], leader, from_education)
             else:
                 for user, data in users.items():
                     if data.get("dates_old"):
-                        _merge_user_into(bible_users, user, data["dates_old"], data["emoji"], leader)
+                        _merge_user_into(bible_users, user, data["dates_old"], data["emoji"], leader, from_education)
                     if data.get("dates_new"):
-                        _merge_user_into(nt_users, user, data["dates_new"], data["emoji"], leader)
+                        _merge_user_into(nt_users, user, data["dates_new"], data["emoji"], leader, from_education)
         elif schedule_type == "education":
             classified = _classify_education_users(users, edu_config)
             for user, data in classified["bible"].items():
-                _merge_user_into(bible_users, user, data["dates"], data["emoji"], leader)
+                _merge_user_into(bible_users, user, data["dates"], data["emoji"], leader, from_education)
             for user, data in classified["nt"].items():
-                _merge_user_into(nt_users, user, data["dates"], data["emoji"], leader)
+                _merge_user_into(nt_users, user, data["dates"], data["emoji"], leader, from_education)
         else:
             # unknown → 성경일독 기본값
             for user, data in users.items():
-                _merge_user_into(bible_users, user, data["dates"], data["emoji"], leader)
+                _merge_user_into(bible_users, user, data["dates"], data["emoji"], leader, from_education)
 
         file_date = _extract_date_from_filename(file_name)
         if file_date and (oldest_file_date is None or file_date < oldest_file_date):

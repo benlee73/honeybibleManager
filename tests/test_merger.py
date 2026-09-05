@@ -1136,3 +1136,57 @@ class TestRoomNameUnicodeNormalization:
 
         assert len(latest) == 1
         assert latest[0]["id"] == "2"
+
+
+class TestLeaderPrecedence:
+    """담당은 교육국방보다 실제 진도방을 우선한다."""
+
+    def _xlsx(self, users, schedule_type, leader, room):
+        meta = {
+            "room_name": room, "track_mode": "single",
+            "schedule_type": schedule_type, "leader": leader, "part": 1,
+        }
+        return build_output_xlsx(users, track_mode="single", meta=meta)
+
+    def _merge(self, mock_list, mock_download, order):
+        """order: [(파일id, schedule_type, leader, room)] 순서대로 처리된다."""
+        data = {
+            fid: self._xlsx({"원예진": {"dates": {"2/2"}, "emoji": "🥑"}}, st, leader, room)
+            for fid, st, leader, room in order
+        }
+        mock_list.return_value = {"success": True, "files": [
+            {"id": fid, "name": f"꿀성경_{leader}_2026021{i}_1050_{room}.xlsx",
+             "modifiedTime": f"2026-02-1{i}T10:50:00Z"}
+            for i, (fid, st, leader, room) in enumerate(order)
+        ]}
+        mock_download.side_effect = lambda f: {"success": True, "data": data[f], "name": f}
+        return merge_files(part=1)
+
+    @patch("app.merger.download_drive_file")
+    @patch("app.merger.list_drive_files")
+    def test_교육국이_먼저_처리돼도__진도방_담당이_이긴다(self, mock_list, mock_download):
+        result = self._merge(mock_list, mock_download, [
+            ("edu", "education", "희준", "교육국"),
+            ("own", "bible", "예진", "예진방"),
+        ])
+
+        assert result["bible_users"]["원예진"]["leader"] == "예진"
+
+    @patch("app.merger.download_drive_file")
+    @patch("app.merger.list_drive_files")
+    def test_진도방이_먼저_처리돼도__결과_동일(self, mock_list, mock_download):
+        result = self._merge(mock_list, mock_download, [
+            ("own", "bible", "예진", "예진방"),
+            ("edu", "education", "희준", "교육국"),
+        ])
+
+        assert result["bible_users"]["원예진"]["leader"] == "예진"
+
+    @patch("app.merger.download_drive_file")
+    @patch("app.merger.list_drive_files")
+    def test_교육국에만_있으면__교육국_담당(self, mock_list, mock_download):
+        result = self._merge(mock_list, mock_download, [
+            ("edu", "education", "희준", "교육국"),
+        ])
+
+        assert result["bible_users"]["원예진"]["leader"] == "희준"

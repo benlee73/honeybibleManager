@@ -61,7 +61,9 @@ education_config.json  # 교육국 멤버 분류 설정 (신약일독/미참여)
    - `education` → `education_config.json` 기반 분류
    - `unknown` → 성경일독 기본값
 5. 중복 사용자는 날짜 합집합으로 병합
-6. "담당" 컬럼 포함 통합 XLSX + 미리보기 반환
+6. 방 명단의 누락 멤버를 빈 날짜로 추가 — 개별 분석과 같은 `merger.inject_missing_members`를 쓴다. 두 경로가 다르면 같은 방이 개별 결과와 통합 결과에서 인원이 달라진다
+7. "담당" 컬럼 포함 통합 XLSX + 미리보기 반환
+   - 담당은 **교육국방보다 실제 진도방을 우선**한다(`merger._pick_leader`). 교육국 담당자는 본인 방과 교육국방 양쪽에 있어서, 먼저 처리된 파일이 이기는 방식이면 Drive 업로드 순서에 따라 담당이 뒤바뀐다
 
 ### 교육국 설정 (education_config.json)
 

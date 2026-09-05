@@ -31,7 +31,7 @@ from app.file_processor import (
     extract_zip_meta,
 )
 from app.file_processor import MAX_DECOMPRESSED_BYTES
-from app.merger import build_merged_preview, build_merged_xlsx, load_education_config, merge_files, resolve_alias, resolve_leader_override
+from app.merger import build_merged_preview, build_merged_xlsx, inject_missing_members, load_education_config, merge_files, resolve_alias, resolve_leader_override
 from app.image_builder import build_output_image
 from app.logger import get_logger
 from app.schedule import resolve_part
@@ -487,26 +487,10 @@ class HoneyBibleHandler(BaseHTTPRequestHandler):
             ]
             room_members = edu_config.get("room_members", {})
             members_list = roster or room_members.get(canonical_leader, [])
-            # 진도 공지만 하고 인증은 안 하는(또는 다른 방에서 하는) 운영자가 있다.
-            # 인증이 있으면 이미 users에 있으므로, 여기서 걸리는 건 공지 전용 운영자다.
-            # leader는 clean_leader_name을 거쳐 성이 빠져 있으므로 같은 기준으로 비교한다.
-            operators = {
-                clean_leader_name(name)
-                for name in (leader, canonical_leader) if name
-            }
-            global_excluded = edu_config.get("excluded_members", [])
-            for member in members_list:
-                if member not in users:
-                    if clean_leader_name(member) in operators:
-                        logger.info("공지 전용 운영자 제외: %s", member)
-                        continue
-                    if any(keyword in member for keyword in global_excluded):
-                        logger.info("제외 대상 멤버 미주입: %s", member)
-                        continue
-                    if track_mode == "dual":
-                        users[member] = {"dates_old": set(), "dates_new": set(), "emoji": ""}
-                    else:
-                        users[member] = {"dates": set(), "emoji": ""}
+            inject_missing_members(
+                users, members_list, (leader, canonical_leader),
+                edu_config.get("excluded_members", []), track_mode,
+            )
             schedule_type = detect_schedule_type(rows, room_name, track_mode, part=part)
             meta = {
                 "room_name": room_name or "",
