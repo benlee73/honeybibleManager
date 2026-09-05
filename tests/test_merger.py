@@ -611,7 +611,7 @@ class TestMergeFiles:
         }
         mock_download.return_value = {"success": True, "data": xlsx_bytes, "name": "꿀성경_방장_20260210_1050_part1.xlsx"}
 
-        result = merge_files()
+        result = merge_files(part=1)
         assert result["success"] is True
         assert "user1" in result["bible_users"]
         assert result["bible_users"]["user1"]["dates"] == {"2/2", "2/3"}
@@ -631,7 +631,7 @@ class TestMergeFiles:
         }
         mock_download.return_value = {"success": True, "data": xlsx_bytes, "name": "test.xlsx"}
 
-        result = merge_files()
+        result = merge_files(part=1)
         assert result["success"] is True
         assert "user1" in result["nt_users"]
         assert len(result["bible_users"]) == 0
@@ -649,7 +649,7 @@ class TestMergeFiles:
         }
         mock_download.return_value = {"success": True, "data": xlsx_bytes, "name": "test.xlsx"}
 
-        result = merge_files(dual_mode="split")
+        result = merge_files(dual_mode="split", part=1)
         assert result["success"] is True
         assert "user1" in result["bible_users"]
         assert result["bible_users"]["user1"]["dates"] == {"2/2"}
@@ -670,7 +670,7 @@ class TestMergeFiles:
         }
         mock_download.return_value = {"success": True, "data": xlsx_bytes, "name": "test.xlsx"}
 
-        result = merge_files(dual_mode="separate")
+        result = merge_files(dual_mode="separate", part=1)
         assert result["success"] is True
         assert len(result["bible_users"]) == 0
         assert len(result["nt_users"]) == 0
@@ -695,7 +695,7 @@ class TestMergeFiles:
         }
         mock_download.return_value = {"success": True, "data": xlsx_bytes, "name": "test.xlsx"}
 
-        result = merge_files()
+        result = merge_files(part=1)
         assert result["success"] is True
         assert "김철수" in result["bible_users"]
         assert "홍지혜" in result["nt_users"]
@@ -726,7 +726,7 @@ class TestMergeFiles:
             {"success": True, "data": xlsx2, "name": "test2.xlsx"},
         ]
 
-        result = merge_files()
+        result = merge_files(part=1)
         assert result["success"] is True
         assert result["bible_users"]["user1"]["dates"] == {"2/2", "2/3", "2/4"}
         assert result["oldest_file_date"] == "20260209_0900"
@@ -734,7 +734,7 @@ class TestMergeFiles:
     @patch("app.merger.list_drive_files")
     def test_Drive_실패__에러_반환(self, mock_list):
         mock_list.return_value = {"success": False, "message": "API 오류"}
-        result = merge_files()
+        result = merge_files(part=1)
         assert result["success"] is False
 
     @patch("app.merger.download_drive_file")
@@ -750,7 +750,7 @@ class TestMergeFiles:
         }
         mock_download.return_value = {"success": True, "data": xlsx_bytes, "name": "old_file.xlsx"}
 
-        result = merge_files()
+        result = merge_files(part=1)
         assert result["success"] is True
         assert len(result["skipped_files"]) == 1
         assert "메타데이터 없음" in result["skipped_files"][0]["reason"]
@@ -771,7 +771,7 @@ class TestMergeFiles:
         }
         mock_download.return_value = {"success": True, "data": xlsx_bytes, "name": "test.xlsx"}
 
-        result = merge_files(dual_mode="separate")
+        result = merge_files(dual_mode="separate", part=1)
         assert result["success"] is True
         assert "이희준" not in result["dual_users"]
         assert "김철수" in result["dual_users"]
@@ -976,7 +976,7 @@ class TestMergeFilesRoomMembers:
         }
 
         with patch("app.merger.load_education_config", return_value=edu_config):
-            result = merge_files()
+            result = merge_files(part=1)
 
         assert result["success"] is True
         assert "참여자A" in result["bible_users"]
@@ -1008,7 +1008,7 @@ class TestMergeFilesRoomMembers:
         }
 
         with patch("app.merger.load_education_config", return_value=edu_config):
-            result = merge_files()
+            result = merge_files(part=1)
 
         assert result["success"] is True
         assert "참여자A" in result["bible_users"]
@@ -1067,3 +1067,72 @@ class TestBuildMergedSheetEmptyDates:
         user_names = [row[1] for row in rows]
         assert "참여자A" in user_names
         assert "미참여자B" in user_names
+
+
+class TestMergePartFilter:
+    """통합은 대상 파트의 결과 파일만 병합한다."""
+
+    def _xlsx(self, user, dates, part=None):
+        meta = {
+            "room_name": f"{user}방", "track_mode": "single",
+            "schedule_type": "bible", "leader": user,
+        }
+        if part is not None:
+            meta["part"] = part
+        return build_output_xlsx(
+            {user: {"dates": set(dates), "emoji": "😀"}}, track_mode="single", meta=meta,
+        )
+
+    @patch("app.merger.download_drive_file")
+    @patch("app.merger.list_drive_files")
+    def test_다른_파트_파일은_건너뛴다(self, mock_list, mock_download):
+        files = {
+            "p1": self._xlsx("옛방", {"2/2"}, part=1),
+            "p2": self._xlsx("새방", {"6/8"}, part=2),
+        }
+        mock_list.return_value = {"success": True, "files": [
+            {"id": "p1", "name": "꿀성경_옛방_20260210_1050_옛방.xlsx", "modifiedTime": "2026-02-10T10:50:00Z"},
+            {"id": "p2", "name": "꿀성경_새방_20260905_1050_새방.xlsx", "modifiedTime": "2026-09-05T10:50:00Z"},
+        ]}
+        mock_download.side_effect = lambda fid: {"success": True, "data": files[fid], "name": fid}
+
+        result = merge_files(part=2)
+
+        assert "새방" in result["bible_users"]
+        assert "옛방" not in result["bible_users"]
+        assert [f["reason"] for f in result["skipped_files"]] == ["PART 1 결과"]
+        assert result["part"] == 2
+
+    @patch("app.merger.download_drive_file")
+    @patch("app.merger.list_drive_files")
+    def test_part_메타_없는_옛_파일은_PART1로_본다(self, mock_list, mock_download):
+        mock_list.return_value = {"success": True, "files": [
+            {"id": "old", "name": "꿀성경_옛방_20260210_1050_옛방.xlsx", "modifiedTime": "2026-02-10T10:50:00Z"},
+        ]}
+        mock_download.return_value = {
+            "success": True, "data": self._xlsx("옛방", {"2/2"}), "name": "옛방",
+        }
+
+        assert "옛방" in merge_files(part=1)["bible_users"]
+        assert "옛방" not in merge_files(part=2)["bible_users"]
+
+
+class TestRoomNameUnicodeNormalization:
+    """NFC/NFD로 갈린 같은 방 이름을 하나로 본다."""
+
+    def test_정규형이_달라도_같은_방(self):
+        import unicodedata
+
+        nfc = unicodedata.normalize("NFC", "성경일독")
+        nfd = unicodedata.normalize("NFD", "성경일독")
+        assert nfc != nfd
+
+        files = [
+            {"id": "1", "name": f"꿀성경_방장_20260210_1050_{nfd}.xlsx", "modifiedTime": "2026-02-10T10:50:00Z"},
+            {"id": "2", "name": f"꿀성경_방장_20260905_1050_{nfc}.xlsx", "modifiedTime": "2026-09-05T10:50:00Z"},
+        ]
+
+        latest = select_latest_per_room(files)
+
+        assert len(latest) == 1
+        assert latest[0]["id"] == "2"

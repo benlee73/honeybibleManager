@@ -281,8 +281,9 @@ class HoneyBibleHandler(BaseHTTPRequestHandler):
             })
             return
 
-        # request body에서 dual_mode 파싱
+        # request body에서 dual_mode, part 파싱
         dual_mode = "separate"
+        merge_part = None
         content_length = self.headers.get("Content-Length")
         if content_length:
             try:
@@ -291,11 +292,12 @@ class HoneyBibleHandler(BaseHTTPRequestHandler):
                     payload = self.rfile.read(length)
                     body = json.loads(payload)
                     dual_mode = body.get("dual_mode", "separate")
+                    merge_part = body.get("part") or None
             except (ValueError, json.JSONDecodeError, TypeError):
                 pass
 
         try:
-            result = merge_files(dual_mode=dual_mode)
+            result = merge_files(dual_mode=dual_mode, part=merge_part)
             if not result["success"]:
                 self._send_json(200, result)
                 return

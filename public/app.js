@@ -736,10 +736,16 @@ if (mergeButton) {
       const dualModeEl = document.querySelector('input[name="dualMode"]:checked');
       const selectedDualMode = dualModeEl ? dualModeEl.value : "separate";
 
+      const mergePartEl = document.querySelector('input[name="mergePart"]:checked');
+      const payload = { dual_mode: selectedDualMode };
+      if (mergePartEl && mergePartEl.value) {
+        payload.part = mergePartEl.value;
+      }
+
       const response = await fetch("/merge", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ dual_mode: selectedDualMode }),
+        body: JSON.stringify(payload),
       });
 
       progressCancelled = true;
@@ -777,10 +783,17 @@ if (mergeButton) {
 
       // 스킵 경고
       if (mergeWarnings && data.skipped_files && data.skipped_files.length > 0) {
-        const lines = data.skipped_files.map(
-          (f) => `${f.name}: ${f.reason}`
+        // 지난 파트 파일이 수십 개씩 걸리므로 사유별로 묶어서 보여준다
+        const byReason = new Map();
+        data.skipped_files.forEach((f) => {
+          const names = byReason.get(f.reason) || [];
+          names.push(f.name);
+          byReason.set(f.reason, names);
+        });
+        const lines = [...byReason].map(([reason, names]) =>
+          names.length <= 2 ? `${reason} (${names.join(", ")})` : `${reason} ${names.length}개`
         );
-        mergeWarnings.textContent = `건너뛴 파일: ${lines.join(", ")}`;
+        mergeWarnings.textContent = `건너뛴 파일: ${lines.join(" · ")}`;
         mergeWarnings.hidden = false;
       }
 

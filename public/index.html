@@ -92,6 +92,13 @@
               <label><input type="radio" name="dualMode" value="separate" checked> 투트랙 따로</label>
               <label><input type="radio" name="dualMode" value="split"> 투트랙 합산</label>
             </fieldset>
+            <fieldset class="part-mode" id="mergePartMode">
+              <legend>진도 파트</legend>
+              <label><input type="radio" name="mergePart" value="" checked> 자동 (오늘 기준)</label>
+              <label><input type="radio" name="mergePart" value="1"> PART 1</label>
+              <label><input type="radio" name="mergePart" value="2"> PART 2</label>
+              <label><input type="radio" name="mergePart" value="3"> PART 3</label>
+            </fieldset>
             <div class="actions">
               <button class="primary" type="button" id="mergeButton">통합</button>
               <div class="progress-bar" id="mergeProgressBar" hidden>

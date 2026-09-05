@@ -3,6 +3,7 @@ import io
 import json
 import os
 import re
+import unicodedata
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from openpyxl import Workbook, load_workbook
@@ -11,6 +12,7 @@ from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from app.analytics import add_formula_analysis_sheet, build_merged_analysis_records
 from app.completion import completion_row, expected_dates, is_complete, normalize_part
 from app.output_builder import sort_dates
+from app.schedule import resolve_part
 from app.style_constants import COL_PAD, ROW_PAD, apply_sheet_style
 from app.drive_uploader import download_drive_file, list_drive_files
 from app.logger import get_logger
@@ -72,7 +74,12 @@ def _education_dedupe_names(config):
 
 
 def _normalize_room_name(room):
-    """방이름에서 '꿀성경' 접두사와 구분자를 제거하여 정규화한다."""
+    """방이름에서 '꿀성경' 접두사와 구분자를 제거하여 정규화한다.
+
+    유니코드 정규형(NFC)도 맞춘다. 같은 방 이름이 NFC/NFD 두 형태로 업로드되면
+    다른 방으로 취급되어 방별 최신 선택이 깨진다.
+    """
+    room = unicodedata.normalize("NFC", room or "")
     for prefix in ("꿀성경 - ", "꿀성경 ", "꿀성경"):
         if room.startswith(prefix):
             room = room[len(prefix):]
@@ -100,6 +107,7 @@ def _extract_room_from_filename(name):
     """
     if not name:
         return name
+    name = unicodedata.normalize("NFC", name)
     # 확장자 제거
     stem = name.rsplit(".", 1)[0] if "." in name else name
     # 꿀성경_방장_날짜_시간_방이름 패턴: 최소 5개 부분
@@ -389,12 +397,15 @@ def _insert_stats_row(ws, stats_text, num_headers):
     ws.freeze_panes = "B5"  # 기존 "B4" → 1행 추가로 "B5"
 
 
-def merge_files(dual_mode="separate"):
+def merge_files(dual_mode="separate", part=None):
     """Drive에서 파일을 가져와 통합한다.
 
     Args:
         dual_mode: "split" — 투트랙 인원을 성경일독/신약일독에 분산 (기존 방식)
                    "separate" — 투트랙 인원을 별도 시트로 분리 (기본값)
+        part: 통합할 진도 파트. 미지정이면 오늘 날짜 기준 파트.
+              다른 파트의 결과 파일은 건너뛴다 — 파트가 다르면 완독 기준이
+              달라 한 표에 섞을 수 없고, Drive에는 지난 파트 파일이 남아 있다.
 
     Returns:
         dict: 성공 시 {"success": True, "bible_users": dict, "nt_users": dict,
@@ -423,7 +434,7 @@ def merge_files(dual_mode="separate"):
     processed_rooms = []
     skipped_files = []
     oldest_file_date = None
-    detected_parts = []
+    target_part = resolve_part(part)
 
     # 4. 파일 병렬 다운로드
     downloads = {}
@@ -457,8 +468,11 @@ def merge_files(dual_mode="separate"):
         track_mode = meta.get("track_mode", "single")
         leader = meta.get("leader", "")
         room_name = meta.get("room_name", "")
-        if meta.get("part"):
-            detected_parts.append(normalize_part(meta.get("part")))
+        # part 필드가 없는 옛 파일은 PART 1 시절 결과다 (normalize_part 기본값 1)
+        file_part = normalize_part(meta.get("part"))
+        if file_part != target_part:
+            skipped_files.append({"name": file_name, "reason": f"PART {file_part} 결과"})
+            continue
 
         logger.info("파일 처리: %s (schedule=%s, track=%s, leader=%s)",
                      file_name, schedule_type, track_mode, leader)
@@ -541,8 +555,6 @@ def merge_files(dual_mode="separate"):
     logger.info("통합 완료: 성경일독 %d명, 신약일독 %d명, 투트랙 %d명, %d개 방, %d개 스킵",
                 len(bible_users), len(nt_users), len(dual_users),
                 len(processed_rooms), len(skipped_files))
-    part = max(set(detected_parts), key=lambda p: (detected_parts.count(p), p)) if detected_parts else 1
-
     return {
         "success": True,
         "bible_users": bible_users,
@@ -551,7 +563,7 @@ def merge_files(dual_mode="separate"):
         "processed_rooms": processed_rooms,
         "skipped_files": skipped_files,
         "oldest_file_date": oldest_file_date,
-        "part": part,
+        "part": target_part,
     }
 
 
