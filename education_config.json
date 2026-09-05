@@ -17,6 +17,11 @@
       "detected": "원예진",
       "markers": ["강민정", "김태현"],
       "actual": "이찬영"
+    },
+    {
+      "detected": "김태환",
+      "markers": ["이창원", "최은규"],
+      "actual": "이희준"
     }
   ],
   "room_members": {
