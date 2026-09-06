@@ -108,35 +108,41 @@ def extract_room_roster(text, normalize_name):
 
     한 번도 인증하지 않은 멤버를 진도표에 남기기 위한 명단이다.
     normalize_name은 표시 이름에서 실제 이름만 남기는 함수(analyzer.normalize_user_name).
+
+    나갔다가 다시 초대되는 사람이 있어 등장 순서대로 처리한다. 집합 연산으로
+    한 번에 빼면 재입장이 반영되지 않는다.
     """
     if not text:
         return []
 
-    joined = set()
-    left = set()
+    events = []
     for match in _INVITE_RE.finditer(text):
         # 초대한 사람도 방 멤버다 (부방장이 초대하는 경우가 있다)
-        joined.add(match.group(1))
-        joined.update(n.strip() for n in _NAME_IN_LIST_RE.findall(match.group(2)))
-    for match in _OWNER_RE.finditer(text):
-        joined.add(match.group(1))
-    for match in _JOIN_RE.finditer(text):
-        joined.add(match.group(1))
-    for match in _LEAVE_RE.finditer(text):
-        left.add(match.group(1))
+        names = [match.group(1)]
+        names += [n.strip() for n in _NAME_IN_LIST_RE.findall(match.group(2))]
+        events.append((match.start(), True, names))
     for match in _KICK_RE.finditer(text):
-        joined.add(match.group(1))
-        left.update(n.strip() for n in _NAME_IN_LIST_RE.findall(match.group(2)))
+        events.append((match.start(), True, [match.group(1)]))
+        events.append((match.start(), False,
+                       [n.strip() for n in _NAME_IN_LIST_RE.findall(match.group(2))]))
+    for pattern in (_OWNER_RE, _JOIN_RE):
+        for match in pattern.finditer(text):
+            events.append((match.start(), True, [match.group(1)]))
+    for match in _LEAVE_RE.finditer(text):
+        events.append((match.start(), False, [match.group(1)]))
 
-    def cleaned(names):
-        result = set()
-        for name in names:
-            value = normalize_name(name.strip())
-            if value:
-                result.add(value)
-        return result
+    members = set()
+    for _, is_join, names in sorted(events, key=lambda e: e[0]):
+        for raw in names:
+            name = normalize_name(raw.strip())
+            if not name:
+                continue
+            if is_join:
+                members.add(name)
+            else:
+                members.discard(name)
 
-    roster = sorted(cleaned(joined) - cleaned(left))
+    roster = sorted(members)
     logger.info("방 멤버 명단 추출: %d명", len(roster))
     return roster
 

@@ -1205,3 +1205,32 @@ class TestExcludedMembersNotInjected:
 
         assert "김참여" in names
         assert "최지혁" not in names
+
+
+class TestRosterRejoin:
+    """나갔다가 다시 초대된 사람은 명단에 남는다."""
+
+    def _roster(self, text):
+        from app.analyzer import normalize_user_name
+        from app.file_processor import extract_room_roster
+
+        return extract_room_roster(text, normalize_user_name)
+
+    def test_퇴장_후_재초대__명단에_포함(self):
+        text = (
+            "김예슬님이 노윤님과 박성은님을 초대했습니다.\n"
+            "노윤님이 나갔습니다.\n"
+            "김예슬님이 노윤님을 초대했습니다.\n"
+        )
+
+        assert self._roster(text) == ["김예슬", "노윤", "박성은"]
+
+    def test_재초대_후_다시_퇴장__명단에서_제외(self):
+        text = (
+            "김예슬님이 노윤님을 초대했습니다.\n"
+            "노윤님이 나갔습니다.\n"
+            "김예슬님이 노윤님을 초대했습니다.\n"
+            "노윤님이 나갔습니다.\n"
+        )
+
+        assert self._roster(text) == ["김예슬"]
